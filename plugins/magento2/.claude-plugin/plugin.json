@@ -1,0 +1,8 @@
+{
+  "name": "magento2",
+  "version": "1.0.0",
+  "description": "Magento 2 / Adobe Commerce coding rules",
+  "author": {
+    "name": "Daniel Łyciuk"
+  }
+}
