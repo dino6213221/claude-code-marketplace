@@ -1,0 +1,8 @@
+{
+  "name": "workflow",
+  "version": "1.0.0",
+  "description": "Git conventions and Jira task writing rules",
+  "author": {
+    "name": "Daniel Łyciuk"
+  }
+}

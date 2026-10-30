@@ -10,7 +10,12 @@
     {
       "name": "magento2",
       "source": "./plugins/magento2",
-      "description": "Magento 2 / Adobe Commerce coding rules"
+      "description": "Magento 2 / Adobe Commerce coding rules and module README generator"
+    },
+    {
+      "name": "workflow",
+      "source": "./plugins/workflow",
+      "description": "Git conventions and Jira task writing rules"
     }
   ]
 }
