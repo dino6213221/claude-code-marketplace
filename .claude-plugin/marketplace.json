@@ -1,0 +1,16 @@
+{
+  "name": "daniel-marketplace",
+  "owner": {
+    "name": "Daniel Łyciuk"
+  },
+  "metadata": {
+    "description": "Personal Claude Code plugins"
+  },
+  "plugins": [
+    {
+      "name": "magento2",
+      "source": "./plugins/magento2",
+      "description": "Magento 2 / Adobe Commerce coding rules"
+    }
+  ]
+}
