@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Wykrywa układ projektu Magento (skill magento2:verify-change, /delivery:init). Wypisuje KEY=VALUE (puste = nie wykryto).
-# Czyta tylko nazwy kluczy i wartości niesekretne (*_ENV_TYPE, TRAEFIK_*), nigdy app/etc/env.php ani auth.json.
-# Użycie: magento2-detect <katalog projektu>  (plik w bin/ pluginu magento2 — jest na PATH, gdy plugin włączony)
+# Detects the Magento project layout (skill magento2:verify-change, /delivery:init). Prints KEY=VALUE (empty = not detected).
+# Reads only key names and non-secret values (*_ENV_TYPE, TRAEFIK_*), never app/etc/env.php or auth.json.
+# Usage: magento2-detect <project directory>  (lives in the magento2 plugin's bin/ — on PATH while the plugin is enabled)
 set -u
 ROOT="${1:-${CLAUDE_PROJECT_DIR:-.}}"
 cd "$ROOT" || exit 1
 
-envval() { # envval <plik> <klucz> — wartość klucza z pliku .env (bez cudzysłowów)
+envval() { # envval <file> <key> — value of a key from a .env file (without quotes)
   [ -f "$1" ] && sed -n "s/^$2=[\"']\{0,1\}\([^\"']*\)[\"']\{0,1\}\$/\1/p" "$1" | head -1
 }
 
-# 1. Katalog Magento (względem projektu)
+# 1. Magento directory (relative to the project)
 MAGENTO_ROOT=""
 if [ -f bin/magento ]; then
   MAGENTO_ROOT="."
@@ -20,7 +20,7 @@ else
 fi
 MR="${MAGENTO_ROOT:-.}"
 
-# 2. Środowisko lokalne (może być kilka kandydatów — wtedy decyduje użytkownik)
+# 2. Local environment (there may be several candidates — then the user decides)
 ENV_CANDIDATES=""
 grep -q '^WARDEN_ENV_TYPE=' .env 2>/dev/null && ENV_CANDIDATES="$ENV_CANDIDATES warden"
 grep -q '^REWARD_ENV_TYPE=' .env 2>/dev/null && ENV_CANDIDATES="$ENV_CANDIDATES reward"
@@ -29,7 +29,7 @@ ENV_CANDIDATES=$(echo "$ENV_CANDIDATES" | xargs)
 ENV_TOOL=""
 [ "$(echo "$ENV_CANDIDATES" | wc -w | tr -d ' ')" = "1" ] && ENV_TOOL="$ENV_CANDIDATES"
 
-# 3. URL sklepu
+# 3. Store URL
 BASE_URL=""; MAIL_URL=""
 case "$ENV_TOOL" in
   warden|reward)
@@ -42,7 +42,7 @@ case "$ENV_TOOL" in
     [ -n "$NAME" ] && MAIL_URL="https://$NAME.ddev.site:8026/" ;;
 esac
 
-# 4. Frontend (może być kilka)
+# 4. Frontend (may be several)
 FRONTEND=""
 grep -q 'hyva-themes/' "$MR/composer.json" "$MR/composer.lock" 2>/dev/null && FRONTEND="$FRONTEND hyva"
 find . -maxdepth 6 -name package.json -not -path '*/node_modules/*' -not -path '*/vendor/*' 2>/dev/null \
@@ -50,10 +50,10 @@ find . -maxdepth 6 -name package.json -not -path '*/node_modules/*' -not -path '
 [ -d "$MR/app/design/frontend" ] && ls "$MR/app/design/frontend"/*/*/web/js/*.js >/dev/null 2>&1 && FRONTEND="$FRONTEND luma"
 FRONTEND=$(echo "$FRONTEND" | xargs)
 
-# 5. PHP z composer.json
+# 5. PHP from composer.json
 PHP_CONSTRAINT=$(sed -n 's/.*"php": *"\([^"]*\)".*/\1/p' "$MR/composer.json" 2>/dev/null | head -1)
 
-# 6. Narzędzia
+# 6. Tools
 HAS_JQ=$(command -v jq >/dev/null && echo yes || echo no)
 HAS_NPX=$(command -v npx >/dev/null && echo yes || echo no)
 

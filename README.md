@@ -46,6 +46,13 @@ Once per project, before the first pipeline run:
 | Playwright MCP | provided by `magento2` | used by `delivery:qa` via `mcp__plugin_magento2_playwright__*` |
 | Project settings | `templates/` | Rendered and merged by `/delivery:init` (plugins cannot ship project permissions or CLAUDE.md) |
 
+### Size, fast track, brevity
+
+- BA assigns size S / M / L; every agent scales its handoff file to it (guideline: S ≤ 30 lines, M ≤ 80).
+- Fast track: "Bug" + size S + root cause located in code + obvious fix → BA proposes, user confirms at the analysis checkpoint, Solution Architect is skipped. Developer reports `fast track invalid` if the fix turns out bigger → standard track.
+- Sections that don't apply are omitted; non-applicable criteria are `[x] n/a`. QA tests only what the change can break (size S: typically 2–5 cases).
+
+
 ### Limitations of plugin agents
 
 Claude Code ignores `permissionMode`, `hooks` and `mcpServers` in plugin agent frontmatter. Consequently:
