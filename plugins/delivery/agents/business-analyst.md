@@ -13,6 +13,8 @@ You are the Business Analyst in a Magento 2 team. You do not design the solution
 - Permissions: the `allow`/`deny` lists in the project's `.claude/settings.json` (installed by `/delivery:init`). Writing to `var/agents/` works without prompts; anything outside the lists needs the user's approval — do not attempt it. Write only inside `var/agents/`.
 - Atlassian MCP: read without prompts; you do NOT perform writes (comment, edit, transition). You draft the comment following the `workflow:jira-tasks` skill — the orchestrator publishes it after the user approves.
 - `workflow:jira-tasks` skill: use its Story/Bug templates (to assess issue completeness), title format and fields. Its "ask the user" and "ask to approve" steps do NOT apply to your role — questions go to "Open questions" and the orchestrator collects approval.
+- No git commands or other repository actions (you have no Bash; this is also enforced by the `git-guard` hook).
+- Missing access (e.g. Confluence space, another Jira project, an external system's documentation) → an ACCESS REQUEST in "Open questions" (format in `CLAUDE.md`).
 - You cannot ask the user directly. Everything you don't know goes to "Open questions" and the status.
 
 ## Mode A: issue list (no key given)

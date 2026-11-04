@@ -1,0 +1,23 @@
+{
+  "_comment": "Rules from earlier template versions that the current template no longer has (or moved to another list). /delivery:init proposes removing them from the project's settings.json.",
+  "allow": [
+    "Bash(git commit *)",
+    "Edit(var/agents/**)",
+    "Edit(vendor/**)",
+    "Edit(generated/**)",
+    "Edit(app/etc/env.php)",
+    "Read(app/etc/env.php)",
+    "Read(auth.json)",
+    "mcp__playwright__*",
+    "mcp__plugin_delivery_playwright__*"
+  ],
+  "deny": [
+    "Bash(git push *)",
+    "Edit(vendor/**)",
+    "Edit(generated/**)",
+    "Edit(app/etc/env.php)",
+    "Read(app/etc/env.php)",
+    "Read(auth.json)"
+  ],
+  "ask": []
+}

@@ -18,6 +18,8 @@ The `SubagentStop` hook automatically checks the handoff file (status, sections,
 2. "Open questions" contain no blocking questions,
 3. the content is consistent with previous stages (e.g. AC coverage matches the AC list),
 4. the file is proportional to the issue size (see "Size, track and brevity" in `CLAUDE.md`) — a size S issue with long, padded files → send the agent back to shorten it (counts as a round only once).
+Git proposals (`GIT PROPOSAL` in "Open questions") → show the exact command to the user; run it only after explicit approval and only if it complies with `workflow:git-conventions`. Business Analyst and Solution Architect never get git tasks.
+Access requests (`ACCESS REQUEST` in "Open questions") → show them to the user as a short list (what, scope, why, fallback) and wait. Granted → re-run the agent; declined → re-run it with the fallback. Never configure MCP servers, hosts or credentials yourself.
 If the hook let the agent through on the second attempt and the file is still invalid — treat it as a failed round and send the agent back with a description of the problem.
 
 ## 0. Start
@@ -60,11 +62,17 @@ If the hook let the agent through on the second attempt and the file is still in
 
 ## 7. Closing
 1. Show the dummy data list; with the user's approval → `qa` cleans up.
-2. Report: branch, commits, files, review result, QA result, deployment steps, Security impact (if applicable), PR description per the `workflow:git-conventions` skill, proposed Jira comment per the `workflow:jira-tasks` skill.
+2. Report — at the very top, if any: **⚠ Manual / server actions required** — the numbered list with exact commands from "Deployment steps" (never summarized into prose). Then: branch, commits, files, review result, QA result, Security impact (if applicable), PR title and description per the `workflow:git-conventions` skill, proposed Jira comment per the `workflow:jira-tasks` skill (including the manual actions).
 3. Retrospective → `07-retro.md`:
    - for each stage: number of rounds, which success criteria failed on the first attempt and why,
    - which questions between agents were needed (a signal that the previous agent missed something),
    - proposed changes to agent definitions (specific section and content).
    Append 3–5 points without client data and without issue content to `var/agents/_retro.md` (this file survives cleanup — the user uses it to improve the agents).
-4. No push, Jira transition or PR without the user's instruction.
+4. Push and pull request — propose, then only with the user's approval:
+   - verify branch name and commit messages against `workflow:git-conventions`; non-compliant → fix first (amend only unpushed commits, with approval),
+   - confirm the PR target branch with the user (default: the repository's main branch),
+   - `git push -u origin <issue branch>` — never `--force`, never to `master`/`main`,
+   - PR: GitHub → `gh pr create --base <target> --title "<title>" --body "<description>"`; other hosts (e.g. Bitbucket) → an approved MCP/CLI if one is configured, otherwise give the user the branch compare link plus the ready title and description,
+   - PR description: max 2 sentences per `workflow:git-conventions` (+ `Security impact` section when required); no other content.
+   Jira transition only on the user's instruction.
 5. With the user's approval delete `var/agents/<KEY>/` and clear `var/agents/.current`.

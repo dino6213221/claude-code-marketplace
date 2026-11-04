@@ -42,6 +42,7 @@ Once per project, before the first pipeline run:
 | Project config | `.claude/delivery.json` (written by init) | `magentoRoot`, `env`, `baseUrl`, `mailUrl`, `frontend`, `php`; handoff dir = `<magentoRoot>/var/agents/` |
 | Generators | `magento2-detect` (from `magento2`), `scripts/render.sh` | Detection and rendering of `templates/settings.json` / `templates/CLAUDE.md` (`{{EXEC}}` etc.) |
 | Handoff gate | `hooks/validate-handoff.sh` (SubagentStop) | Rejects a handoff file with wrong status, missing sections or unchecked criteria on a positive status |
+| Git guard | `hooks/git-guard.sh` (PreToolUse Bash) | Blocks every `git`/`gh` command for `delivery:business-analyst` and `delivery:solution-architect`. Developer, Code Reviewer and QA only propose repository changes (`GIT PROPOSAL`); commit/push/PR run after the user's approval |
 | SQL guard | `hooks/sql-guard.sh` (PreToolUse Bash) | Active only for `delivery:qa`; blocks DROP/TRUNCATE/ALTER, DELETE/UPDATE without WHERE, SQL writes not targeting `QA-` records |
 | Playwright MCP | provided by `magento2` | used by `delivery:qa` via `mcp__plugin_magento2_playwright__*` |
 | Project settings | `templates/` | Rendered and merged by `/delivery:init` (plugins cannot ship project permissions or CLAUDE.md) |
@@ -52,6 +53,12 @@ Once per project, before the first pipeline run:
 - Fast track: "Bug" + size S + root cause located in code + obvious fix → BA proposes, user confirms at the analysis checkpoint, Solution Architect is skipped. Developer reports `fast track invalid` if the fix turns out bigger → standard track.
 - Sections that don't apply are omitted; non-applicable criteria are `[x] n/a`. QA tests only what the change can break (size S: typically 2–5 cases).
 
+### Git, access requests, manual actions
+
+- Commit (developer), push and PR (orchestrator at closing) only with the user's approval (`ask` rules) and per `workflow:git-conventions`. Force push and push to `master`/`main` are denied. PR: `gh pr create` on GitHub; other hosts get the compare link + ready title/description.
+- Agents request missing access (MCP, server, tool) as `ACCESS REQUEST` in "Open questions"; the orchestrator relays it to the user.
+- Every manual/server action (bin/magento commands, scripts, admin config…) is listed as numbered exact commands in "Deployment steps" and shown at the top of the final report.
+- `templates/retired-rules.json` lets `/delivery:init` remove rules from older template versions (e.g. the old `deny: Bash(git push *)`).
 
 ### Limitations of plugin agents
 

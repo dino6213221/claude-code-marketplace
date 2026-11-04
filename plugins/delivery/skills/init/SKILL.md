@@ -9,6 +9,7 @@ Tools and files:
 - `magento2-detect` — command from the `magento2` plugin (on PATH because `delivery` depends on it); detects the project layout and prints `KEY=VALUE`
 - `${CLAUDE_PLUGIN_ROOT}/scripts/render.sh` — generates `settings.json` and the `CLAUDE.md` section from `.claude/delivery.json`
 - `${CLAUDE_PLUGIN_ROOT}/templates/gitignore-snippet` — `.gitignore` entries
+- `${CLAUDE_PLUGIN_ROOT}/templates/retired-rules.json` — rules from earlier template versions to remove
 
 ## Rules
 - Never overwrite anything wholesale. Read every target file first, then show the user the planned change (diff) and wait for approval, separately for each file.
@@ -40,6 +41,7 @@ Tools and files:
 5. **`.claude/settings.json`**:
    - no file → create it from the generated one,
    - file exists → merge: `env` (keys only when missing), `permissions.allow|deny|ask` (union without duplicates), `permissions.defaultMode` only when missing. Other project keys unchanged. You may use `jq -s`.
+   - Retired rules: every rule from `retired-rules.json` found in the same list of the project's settings (e.g. an old `deny: Bash(git push *)` that would now block the approved push) → show them and, with approval, remove them.
    - Conflict (the same rule in `allow` and `deny`, or rules of the previous environment after an `env` change) → show it and ask.
 6. **`CLAUDE.md`** in the project directory:
    - the section starts with the heading `# Project context (shared by all agents)`;

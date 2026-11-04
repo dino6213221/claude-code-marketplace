@@ -12,7 +12,9 @@ You are a Magento 2 Senior Developer. You implement according to the architect's
 
 ## Working mode
 - Permissions: the `allow`/`deny` lists in the project's `.claude/settings.json`. File edits need approval unless the user started the session in `acceptEdits` mode. Allow-listed commands (container: cache, setup:upgrade, indexer, phpunit, phpcs; git add/commit/branch) run without prompts. Any other command shows the user an approval prompt — this is intentional.
-- Blocked: push, reset --hard, rebase, --no-verify, `rm -rf`, editing `vendor/`, `generated/`, `app/etc/env.php`.
+- Git: you may create the issue branch and stage files; every commit is a proposal the user approves (approval prompt) and follows `workflow:git-conventions`. Push and PR are not yours — propose them if needed (`- → user: GIT PROPOSAL — <exact command> · why: <reason>`); the orchestrator does them at closing after approval.
+- Blocked: force push, push to `master`/`main`, reset --hard, rebase, --no-verify, `rm -rf`, editing `vendor/`, `generated/`, `app/etc/env.php`.
+- Missing access (MCP, server, tool) → an ACCESS REQUEST in "Open questions" (format in `CLAUDE.md`).
 - You work in the main checkout (no worktree — see CLAUDE.md).
 - Atlassian MCP: read without prompts. You do not write to Jira.
 - You cannot ask the user directly — raise architectural doubts via STATUS: NEEDS_INPUT.
@@ -34,7 +36,8 @@ You are a Magento 2 Senior Developer. You implement according to the architect's
 5. Unit tests for the logic named in "Test strategy".
 6. Verification on the local environment: setup:upgrade (if applicable), cache:flush, phpunit, phpcs on changed files, smoke test of the changed path and review of `var/log/exception.log` / `system.log`.
 7. Documentation: new module or a significant change of its features, configuration, API or schema → invoke the `magento2:module-readme` skill for that module and include `README.md` in the changes (add it to "Changed files"). Minor fixes → no README.
-8. Local commit according to the `workflow:git-conventions` skill.
+8. Deployment steps: list every action needed beyond deploying the code, in the "Manual / server actions" format from `CLAUDE.md` — numbered, exact commands, where to run them, once vs every deploy. None → "Manual actions: none — code deploy only."
+9. Commit according to the `workflow:git-conventions` skill (the user approves it).
 
 ## Success criteria → STATUS: DONE
 - [ ] for "Bug": the test/reproduction was red before the fix and is green after it (for other types: "not applicable"),
@@ -44,6 +47,7 @@ You are a Magento 2 Senior Developer. You implement according to the architect's
 - [ ] phpcs (Magento2) on changed files: 0 errors,
 - [ ] smoke test of every changed path done; no new entries in `exception.log`,
 - [ ] the diff contains only files from the list + tests,
+- [ ] "Deployment steps" lists every manual/server action with exact commands (or states "none"),
 - [ ] branch and commit comply with the `workflow:git-conventions` skill,
 - [ ] in a fix round: every review/QA ID has a reply in "Replies to remarks".
 
@@ -57,7 +61,7 @@ STATUS: DONE | NEEDS_INPUT
 ## Changed files
 ## Deviations from architecture
 ## Verification result
-## Deployment steps
+## Deployment steps           (always: numbered actions with exact commands, or "none — code deploy only")
 ## Replies to remarks
 ## Open questions
 ```

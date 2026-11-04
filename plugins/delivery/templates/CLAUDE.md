@@ -31,6 +31,26 @@
 - Destructive operations (DROP/TRUNCATE, DELETE/UPDATE without WHERE, `rm -rf`, force-push, `reset --hard`, skipping hooks) → require the user's confirmation naming the environment.
 - Business rules: Jira/Confluence are the source. Code = current behavior, Confluence/Jira = intended behavior. Divergence → report it, do not resolve it yourself. Never invent rules.
 
+## Git: commit, push, pull request
+- **Business Analyst and Solution Architect: no git commands at all** (not even read-only) — enforced by the plugin's `git-guard` hook.
+- **Senior Developer, Code Reviewer, QA: may propose git actions; nothing that changes the repository runs without the user's approval.** The developer's commit runs through an approval prompt; Code Reviewer and QA do not change the repository — they put proposals in "Open questions" as `- → user: GIT PROPOSAL — <exact command> · why: <reason>`, and the orchestrator asks the user.
+- Commit, push and pull request are allowed ONLY with the user's approval (each one shows an approval prompt) and ONLY according to the `workflow:git-conventions` skill: branch `<type>/<KEY>-<description>`, commit message `<KEY> <max 2 sentences>`, PR description max 2 sentences (+ a `Security impact` section when the change touches auth, secrets, encryption, logging/audit, backups or access control). No co-author lines or other footers.
+- Push only the issue branch, never `--force`, never to `master`/`main` (blocked in settings). Never `--no-verify`.
+- The developer commits; push and PR are done by the orchestrator at closing. The PR target branch is confirmed with the user.
+
+## Access requests (MCP, servers, tools)
+- An agent may request access it needs (an MCP server, a server/environment, a CLI tool, credentials). Agents never configure access or obtain credentials themselves.
+- Request format in `## Open questions`:
+  `- → user: ACCESS REQUEST — <what: MCP server / host / tool> · scope: <read | write> · why: <what it unblocks> · without it: <fallback or what stays unverified>`
+- A request that blocks the work is a blocking question. The orchestrator relays it to the user; the user grants it (MCP from the FWC "Approved Tools" list, credentials via 1Password) or declines, and the agent continues or uses the fallback.
+
+## Manual / server actions
+- Every action needed beyond deploying the code must be stated explicitly — never implied. Examples: `bin/magento` commands (setup:upgrade, indexer:reindex, cache, config:set, queue consumers), one-off scripts, cron changes, admin configuration, data imports, environment variables, third-party/server configuration.
+- Format — a numbered list, one action per item, in execution order:
+  `1. <where: environment + place (container / admin / server)> — <exact command or click path> — <once | every deploy> — <expected result>`
+- No such actions → the single line "Manual actions: none — code deploy only."
+- The orchestrator puts these actions at the top of the final report and in the proposed Jira comment.
+
 ## Handoff files
 - Directory: `{{MAGENTO_ROOT}}/var/agents/<KEY>/` (ignored by git). Every `var/agents/...` path in the agent and orchestrator definitions means `{{MAGENTO_ROOT}}/var/agents/...` relative to the project directory.
 - The file `var/agents/.current` holds the current issue key (written by the orchestrator; read by the validation hook).

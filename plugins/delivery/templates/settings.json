@@ -15,7 +15,6 @@
       "Bash(git checkout -b *)",
       "Bash(git switch -c *)",
       "Bash(git add *)",
-      "Bash(git commit *)",
       "Bash({{EXEC}} vendor/bin/phpcs *)",
       "Bash({{EXEC}} vendor/bin/phpstan *)",
       "Bash({{EXEC}} vendor/bin/phpunit *)",
@@ -35,7 +34,6 @@
       "mcp__plugin_magento2_playwright__*"
     ],
     "deny": [
-      "Bash(git push *)",
       "Bash(git reset --hard*)",
       "Bash(git rebase *)",
       "Bash(*--no-verify*)",
@@ -44,9 +42,19 @@
       "Edit(**/generated/**)",
       "Edit(**/app/etc/env.php)",
       "Read(**/app/etc/env.php)",
-      "Read(**/auth.json)"
+      "Read(**/auth.json)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(git push * master*)",
+      "Bash(git push * main*)",
+      "Bash(git push * +*)"
     ],
     "ask": [
+      "Bash(gh pr create *)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
       "mcp__atlassian__addCommentToJiraIssue",
       "mcp__atlassian__editJiraIssue",
       "mcp__atlassian__transitionJiraIssue",
