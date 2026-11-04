@@ -79,6 +79,12 @@ Nothing else is permitted in the PR description.
 - **NO Emojis, footers, or generated-by / co-author signatures.**
 - **NO Long descriptions exceeding 2 sentences.**
 
+### Where the PR is created
+
+- GitHub: `gh pr create --base <target> --title "<title>" --body "<description>"`.
+- Bitbucket / GitLab / other hosts without an approved CLI or MCP: give the user the compare / new-PR link for the branch and target, plus the ready title and description to paste. Do not install a new CLI for it.
+- PR title: follow the titles of recent PRs in the repository; when there is no visible pattern, use the issue's commit message (the first one, when there are several).
+
 ### Exception
 
 PRs touching auth, secrets, encryption, logging/audit, backups, or access control MUST additionally include a `Security impact` section.

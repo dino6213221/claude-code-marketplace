@@ -20,11 +20,17 @@ else
 fi
 MR="${MAGENTO_ROOT:-.}"
 
-# 2. Local environment (there may be several candidates — then the user decides)
+# 2. Local environment (there may be several candidates — then the user decides). Known: warden, reward, ddev; otherwise custom | native
 ENV_CANDIDATES=""
 grep -q '^WARDEN_ENV_TYPE=' .env 2>/dev/null && ENV_CANDIDATES="$ENV_CANDIDATES warden"
 grep -q '^REWARD_ENV_TYPE=' .env 2>/dev/null && ENV_CANDIDATES="$ENV_CANDIDATES reward"
 [ -f .ddev/config.yaml ] && ENV_CANDIDATES="$ENV_CANDIDATES ddev"
+# docker-magento (markshust) and plain docker compose have no fixed command prefix → "custom" (init asks for exec/db)
+if [ -z "$ENV_CANDIDATES" ]; then
+  for f in compose.yaml compose.yml docker-compose.yml docker-compose.yaml; do [ -f "$f" ] && ENV_CANDIDATES="custom"; done
+  # native only when Magento is in the project directory itself (commands run without cd)
+  [ -z "$ENV_CANDIDATES" ] && [ "$MAGENTO_ROOT" = "." ] && command -v php >/dev/null && ENV_CANDIDATES="native"
+fi
 ENV_CANDIDATES=$(echo "$ENV_CANDIDATES" | xargs)
 ENV_TOOL=""
 [ "$(echo "$ENV_CANDIDATES" | wc -w | tr -d ' ')" = "1" ] && ENV_TOOL="$ENV_CANDIDATES"
@@ -53,7 +59,41 @@ FRONTEND=$(echo "$FRONTEND" | xargs)
 # 5. PHP from composer.json
 PHP_CONSTRAINT=$(sed -n 's/.*"php": *"\([^"]*\)".*/\1/p' "$MR/composer.json" 2>/dev/null | head -1)
 
-# 6. Tools
+# 5b. Edition (composer.json require) and MSI (app/etc/config.php module list — no secrets in that file)
+EDITION=""
+if [ -f "$MR/composer.json" ]; then
+  if grep -Eq '"magento/(product-enterprise-edition|magento-cloud-metapackage)"' "$MR/composer.json"; then EDITION=adobe-commerce
+  elif grep -q '"mage-os/' "$MR/composer.json"; then EDITION=mage-os
+  elif grep -Eq '"magento/(product-community-edition|project-community-edition)"' "$MR/composer.json"; then EDITION=open-source
+  fi
+fi
+MSI=""
+if [ -f "$MR/app/etc/config.php" ]; then
+  Q="[\"']"
+  if grep -Eq "${Q}Magento_Inventory${Q} *=> *1" "$MR/app/etc/config.php"; then MSI=yes
+  elif grep -Eq "${Q}Magento_Inventory${Q} *=> *0" "$MR/app/etc/config.php" || ! grep -Eq "${Q}Magento_Inventory${Q}" "$MR/app/etc/config.php"; then MSI=no
+  fi
+fi
+# PHP constraint fallback: composer.lock platform requirement
+[ -n "$PHP_CONSTRAINT" ] || PHP_CONSTRAINT=$(jq -r '.platform.php // empty' "$MR/composer.lock" 2>/dev/null || true)
+
+# 6. VCS host of `origin` — only host and repository path; credentials in the URL are stripped and never printed
+VCS_HOST=""; VCS_REPO=""
+URL=$(git remote get-url origin 2>/dev/null || true)
+if [ -n "$URL" ]; then
+  HP=$(echo "$URL" | sed -E 's#^[a-z+]+://##; s#^[^@/]*@##')     # drop scheme and user[:token]@
+  HOST=$(echo "$HP" | sed -E 's#[:/].*##')
+  VCS_REPO=$(echo "$HP" | sed -E 's#^[^:/]*[:/]##; s#^[0-9]+/##; s#\.git$##')
+  case "$HOST" in
+    *github*)    VCS_HOST=github ;;
+    *bitbucket*) VCS_HOST=bitbucket ;;
+    *gitlab*)    VCS_HOST=gitlab ;;
+    *)           VCS_HOST=other ;;
+  esac
+fi
+unset URL HP HOST
+
+# 7. Tools
 HAS_JQ=$(command -v jq >/dev/null && echo yes || echo no)
 HAS_NPX=$(command -v npx >/dev/null && echo yes || echo no)
 
@@ -65,6 +105,10 @@ BASE_URL=$BASE_URL
 MAIL_URL=$MAIL_URL
 FRONTEND=$FRONTEND
 PHP_CONSTRAINT=$PHP_CONSTRAINT
+EDITION=$EDITION
+MSI=$MSI
+VCS_HOST=$VCS_HOST
+VCS_REPO=$VCS_REPO
 HAS_JQ=$HAS_JQ
 HAS_NPX=$HAS_NPX
 EOF

@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "SubagentStart": [
+      {
+        "matcher": "^delivery:(business-analyst|solution-architect|senior-developer|code-reviewer|qa)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/subagent-start.sh\""
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "matcher": "^delivery:(business-analyst|solution-architect|senior-developer|code-reviewer|qa)$",
@@ -17,11 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/sql-guard.sh\""
-          },
-          {
-            "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/git-guard.sh\""
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash.sh\""
           }
         ]
       }

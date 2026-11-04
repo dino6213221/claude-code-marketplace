@@ -41,7 +41,9 @@ If some information is missing, skip it.
 
 ---
 
-### Documentation Structure (MANDATORY)
+### Documentation Structure
+
+Use the headings below in this order. **Include a section only when the module has something for it** (no cron → no "Cron Jobs" section; no "N/A", "None" or placeholder text). Module Overview, Features and Architecture are always present. A small module may end up with five sections — that is correct.
 
 # Module Overview
 - Module name
@@ -112,7 +114,12 @@ If some information is missing, skip it.
 - Version
 - Changes
 
+(Only when the module has a `composer.json` version or the repository keeps a changelog for it — do not invent versions.)
+
 ---
+
+### Updating an existing README
+If `README.md` exists, update only the sections the change affects and keep the rest; do not regenerate the whole file.
 
 ### Formatting Rules
 - Use bullet points where possible

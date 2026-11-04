@@ -23,7 +23,9 @@ Your goal is to minimize ambiguity and ensure that the developer or assignee has
 
 The title must be understandable without reading the description.
 
-* **Rule:** `[Type] Short, concise description of the action (Verb + Noun)`
+* **Project convention first:** before proposing a title, look at 5–10 recent issues of the same Jira project (JQL `project = <KEY> ORDER BY created DESC`) and follow their title pattern (prefix or no prefix, language, casing). The rule below is the default when the project has no visible convention.
+
+* **Default rule:** `[Type] Short, concise description of the action (Verb + Noun)`
 
 * **GOOD Examples:**
 

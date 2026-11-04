@@ -1,5 +1,5 @@
 {
-  "_comment": "Rules from earlier template versions that the current template no longer has (or moved to another list). /delivery:init proposes removing them from the project's settings.json.",
+  "_comment": "Rules from earlier template versions that the current template no longer has (or moved to another list). render.sh fills in {{EXEC}}; /delivery:init proposes removing them from the project's settings.json. Old Atlassian allow wildcards (project server, claude.ai connector, external atlassian plugin) are retired: Atlassian now comes from the workflow plugin. Old ask rules for those prefixes are intentionally NOT retired — they stay harmless if the user keeps another Atlassian source.",
   "allow": [
     "Bash(git commit *)",
     "Edit(var/agents/**)",
@@ -9,7 +9,11 @@
     "Read(app/etc/env.php)",
     "Read(auth.json)",
     "mcp__playwright__*",
-    "mcp__plugin_delivery_playwright__*"
+    "mcp__plugin_delivery_playwright__*",
+    "Bash({{EXEC}} tail *)",
+    "mcp__atlassian__*",
+    "mcp__claude_ai_Atlassian__*",
+    "mcp__plugin_atlassian_atlassian__*"
   ],
   "deny": [
     "Bash(git push *)",

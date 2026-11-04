@@ -1,6 +1,6 @@
 ---
 name: verify-change
-description: Verify a Magento 2 change on the local environment with evidence — decide per test case whether it needs a real browser (storefront Hyvä/Luma/PWA, admin, checkout, emails) or a non-browser check (GraphQL/REST, CLI, cron, DB read, logs), then run it with Playwright MCP or the container CLI and record the result. Use when executing QA test cases, smoke-testing a change, or when asked to check or click through a change in the browser ("sprawdź w przeglądarce", "przeklikaj"). Works standalone or inside the delivery pipeline.
+description: Verify a Magento 2 change on the local environment with evidence, choosing per test case between a real browser (storefront Hyvä/Luma/PWA, admin, checkout, emails) and a non-browser check (GraphQL/REST, CLI, cron, DB read, logs). Use when executing QA test cases or a test plan, smoke-testing a change across API/CLI and UI, or inside the delivery pipeline. Also when asked to check or click through a change in the browser ("sprawdź w przeglądarce", "przeklikaj").
 argument-hint: "[what to verify — change description, ACs or Jira key]"
 ---
 
@@ -23,6 +23,7 @@ You verify a change on the **local** environment. Never staging/production unles
    | `warden` | `warden env exec -T php-fpm` | `warden db connect` |
    | `reward` | `reward env exec -T php-fpm` | `reward db connect` |
    | `ddev` | `ddev exec` | `ddev mysql` |
+   | `custom` / `native` / empty | ask the user for the command prefix that runs PHP in the Magento directory (native: none) | ask for the database client command |
 
    `<URL>` = `BASE_URL`. Missing or several candidates → ask the user. State the values you use in one sentence and carry on.
 3. Environment not running (`<EXEC> php -v` fails) → stop and tell the user; do not start the environment yourself without approval.
@@ -38,6 +39,7 @@ You verify a change on the **local** environment. Never staging/production unles
 | GraphQL resolver / REST endpoint | `curl` to `<URL>/graphql` or `/rest/...` | no (for PWA also the browser, if the AC concerns the UI) |
 | Cron, queue consumer, CLI command, import | `<EXEC> bin/magento ...`, logs, DB read | no |
 | Observers/plugins without UI | trigger the action (CLI/API/UI) + read the effect in DB/log | depends on the trigger |
+| Attribute-driven behavior (EAV) | set/read the value in the store view under test (multi-store projects), not only default scope | depends |
 | Indexes, cache, FPC | flush/reindex + compare responses (`X-Magento-Cache-*` headers) | optional |
 
 Rule: browser when the AC describes something a **person sees or clicks**. Otherwise the cheapest deterministic method. When both — both.

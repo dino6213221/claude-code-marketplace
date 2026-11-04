@@ -10,7 +10,7 @@
     {
       "name": "magento2",
       "source": "./plugins/magento2",
-      "description": "Magento 2 / Adobe Commerce coding rules, module README generator and change verification (browser, API, CLI)"
+      "description": "Magento 2 / Adobe Commerce / Mage-OS coding rules, module README generator and change verification (browser, API, CLI)"
     },
     {
       "name": "workflow",
@@ -20,7 +20,7 @@
     {
       "name": "delivery",
       "source": "./plugins/delivery",
-      "description": "Agent pipeline delivering a Jira task end-to-end (BA, SA, QA plan, Dev, CR, QA) with handoff gates"
+      "description": "Agent pipeline delivering a Jira task end-to-end (BA, SA, QA plan, Dev, CR, QA) with handoff gates, resumable state and retro-driven improvements"
     }
   ]
 }

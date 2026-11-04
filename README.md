@@ -13,11 +13,13 @@ Personal Claude Code plugin marketplace.
 
 `delivery` depends on `magento2` and `workflow` (installed automatically as dependencies).
 
-Once per project, before the first pipeline run:
+Once per project, before the first pipeline run — and again after every plugin update (see `CHANGELOG.md`):
 
 ```
 /delivery:init
 ```
+
+Tests (require `jq`): `bash plugins/delivery/tests/hooks.sh` (guards and handoff gate), `bash plugins/magento2/tests/detect.sh` (project layouts, editions, MSI, credentials never printed), `bash plugins/delivery/tests/render.sh` (generated settings/CLAUDE.md for warden, reward, ddev, custom, native; editions; MSI on/off; single/multi-store). Manifest check: `claude plugin validate .`
 
 ## Plugins
 
@@ -26,12 +28,15 @@ Once per project, before the first pipeline run:
 | `magento2` | `/magento2:coding-rules` | Magento 2 / Adobe Commerce coding rules (SOLID, DI, plugins, service contracts, escaping, FPC, performance) |
 | `magento2` | `/magento2:module-readme` | Generates a complete README.md for a Magento 2 module |
 | `magento2` | `/magento2:verify-change [scope]` | Verifies a change on the local env: picks browser (Playwright) vs API / CLI / DB per case, runs it, reports evidence. Standalone or as `delivery:qa`'s preloaded skill |
-| `magento2` | `magento2-detect` (bin) | Detects Magento root, env (Warden / Reward / DDEV), URLs, frontend, PHP; on PATH while the plugin is enabled |
+| `magento2` | `magento2-detect` (bin) | Detects Magento root, env (Warden / Reward / DDEV; docker compose → `custom`; PHP on the host → `native`), URLs, frontend, PHP, edition, MSI, repository host (`VCS_HOST`/`VCS_REPO`, credentials stripped); on PATH while the plugin is enabled |
 | `magento2` | Playwright MCP | `.mcp.json`, pinned `@playwright/mcp@0.0.83 --ignore-https-errors`; tools `mcp__plugin_magento2_playwright__*` |
+| `workflow` | Atlassian MCP | `.mcp.json`, Atlassian Remote MCP `https://mcp.atlassian.com/v2/mcp` (OAuth on first use via `/mcp`); tools `mcp__plugin_workflow_atlassian__*` — the only Atlassian source the pipeline uses |
 | `workflow` | `/workflow:git-conventions` | Branch naming, commit message and PR description conventions |
 | `workflow` | `/workflow:jira-tasks` | Jira task templates (Story / Bug), title format and field guidance |
-| `delivery` | `/delivery:deliver [KEY]` | Orchestrator: BA → SA → QA plan → Dev → CR → QA, with handoff files in `var/agents/<KEY>/` |
-| `delivery` | `/delivery:init` | Detects Magento root, local env (Warden / Reward / DDEV) and frontend (Hyvä / Luma / PWA), saves `.claude/delivery.json`, merges generated permissions into `.claude/settings.json`, agent context into `CLAUDE.md`, `.gitignore` entries |
+| `delivery` | `/delivery:deliver [KEY]` | Orchestrator: BA → SA → QA plan → Dev → CR → QA, with handoff files and `state.json` in `var/agents/<KEY>/`; resumes an interrupted issue |
+| `delivery` | `/delivery:status [KEY]` | Read-only: stage, round, statuses of the handoff files, next step |
+| `delivery` | `/delivery:apply-retro [source dir]` | Turns open points of `var/agents/_retro.md` into plugin changes (with approval), bumps versions, marks points applied |
+| `delivery` | `/delivery:init` | Detects Magento root, local env (Warden / Reward / DDEV / custom / native), edition, MSI, store setup, frontend (Hyvä / Luma / PWA) and repository host, saves `.claude/delivery.json`, merges generated permissions into `.claude/settings.json`, the marked agent context section into `CLAUDE.md` (migrates 1.0.x sections), `.gitignore` entries |
 | `delivery` | agents `delivery:*` | `business-analyst`, `solution-architect`, `qa`, `senior-developer`, `code-reviewer` |
 
 ## delivery — how the pieces fit
@@ -39,11 +44,12 @@ Once per project, before the first pipeline run:
 | Piece | Location | Notes |
 |-------|----------|-------|
 | Agents | `plugins/delivery/agents/` | Preloaded skills (verified to load with plugin prefix): BA `workflow:jira-tasks`; SA `magento2:coding-rules`; Dev `magento2:coding-rules`, `workflow:git-conventions` (+ `magento2:module-readme` on demand); CR `magento2:coding-rules`, `workflow:git-conventions`; QA `magento2:verify-change` |
-| Project config | `.claude/delivery.json` (written by init) | `magentoRoot`, `env`, `baseUrl`, `mailUrl`, `frontend`, `php`; handoff dir = `<magentoRoot>/var/agents/` |
-| Generators | `magento2-detect` (from `magento2`), `scripts/render.sh` | Detection and rendering of `templates/settings.json` / `templates/CLAUDE.md` (`{{EXEC}}` etc.) |
-| Handoff gate | `hooks/validate-handoff.sh` (SubagentStop) | Rejects a handoff file with wrong status, missing sections or unchecked criteria on a positive status |
-| Git guard | `hooks/git-guard.sh` (PreToolUse Bash) | Blocks every `git`/`gh` command for `delivery:business-analyst` and `delivery:solution-architect`. Developer, Code Reviewer and QA only propose repository changes (`GIT PROPOSAL`); commit/push/PR run after the user's approval |
-| SQL guard | `hooks/sql-guard.sh` (PreToolUse Bash) | Active only for `delivery:qa`; blocks DROP/TRUNCATE/ALTER, DELETE/UPDATE without WHERE, SQL writes not targeting `QA-` records |
+| Project config | `.claude/delivery.json` (written by init) | `magentoRoot`, `env` (`warden`\|`reward`\|`ddev`\|`custom`\|`native`), `exec` + `db` + `envName` (custom), `baseUrl`, `mailUrl`, `edition`, `msi`, `multiStore`, `frontend`, `php`, `language` (handoff prose; headings stay English), `vcsHost`, `vcsRepo`, `envWorkarounds` (lines for CLAUDE.md, `{{EXEC}}` allowed), `extraAllow` / `extraDeny` (extra permission rules); only `magentoRoot` and `env` are required; handoff dir = `<magentoRoot>/var/agents/` |
+| Pipeline state | `var/agents/<KEY>/state.json` (orchestrator only) | `stage`, `round`, `track`, `size`, `qaMode` — read by the hooks and `/delivery:status` |
+| Generators | `magento2-detect` (from `magento2`), `scripts/render.sh` | Detection and rendering of `templates/settings.json`, `templates/CLAUDE.md`, `templates/retired-rules.json` (`{{EXEC}}` etc.); fails on an unreplaced placeholder |
+| Start marker | `hooks/subagent-start.sh` (SubagentStart) | Writes `var/agents/<KEY>/.start-<agent>` so the gate can tell a fresh file from one left over from an earlier round |
+| Handoff gate | `hooks/validate-handoff.sh` (SubagentStop) | Rejects a handoff file with wrong status, missing sections (English or 1.0.x Polish headings), unchecked criteria on a positive status, not updated in this run, or longer than 2× the size guideline. Second attempt passes — the orchestrator decides |
+| Bash guards | `hooks/pre-bash.sh` (PreToolUse Bash, shared helpers in `hooks/lib.sh`) | **git-guard** — every `git`/`gh` blocked for `delivery:business-analyst` and `delivery:solution-architect`. **sql-guard** — `delivery:qa` only: DROP/TRUNCATE/ALTER, DELETE/UPDATE without WHERE, SQL writes not targeting `QA-` records, SQL from files, DB access from inline PHP. **push-guard** — every session in an initialized project: push to `master`/`main` via any refspec, force, `+refspec`, `--mirror`, `--all`, `--prune`. Defense in depth on top of the settings rules, not a sandbox |
 | Playwright MCP | provided by `magento2` | used by `delivery:qa` via `mcp__plugin_magento2_playwright__*` |
 | Project settings | `templates/` | Rendered and merged by `/delivery:init` (plugins cannot ship project permissions or CLAUDE.md) |
 
@@ -67,6 +73,8 @@ Claude Code ignores `permissionMode`, `hooks` and `mcpServers` in plugin agent f
 - agents inherit the main session's permission mode and the project's `.claude/settings.json` rules (no per-agent `dontAsk` / `acceptEdits`),
 - the QA hook is defined at plugin level (`delivery`) and the Playwright server comes from `magento2`, instead of both living in `qa.md`.
 
-Requirements: `jq` (`brew install jq`) for hooks and init; Node.js (`npx`) for Playwright MCP.
+Self-contained: the pipeline uses only plugins and MCP servers from this marketplace (no external plugins required).
 
-Agent memory (`memory: local`) lands in `.claude/agent-memory-local/delivery-<agent>/`.
+Requirements: `jq` (`brew install jq`) for hooks and init; Node.js (`npx`) for Playwright MCP; an Atlassian account for the Atlassian MCP (OAuth).
+
+Agent memory (`memory: local`) lands in `<project>/.claude/agent-memory-local/delivery-<agent>/` — only while the session's working directory is the project directory (the orchestrator never `cd`s; init and closing check for memory misplaced under `var/agents/`).
