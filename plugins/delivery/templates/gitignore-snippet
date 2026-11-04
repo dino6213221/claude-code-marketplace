@@ -1,0 +1,3 @@
+# Claude Code — pamięć agentów (lokalna, poza repo)
+.claude/agent-memory-local/
+.claude/settings.local.json

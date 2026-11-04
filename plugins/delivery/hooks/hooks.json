@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SubagentStop": [
+      {
+        "matcher": "^delivery:(business-analyst|solution-architect|senior-developer|code-reviewer|qa)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/validate-handoff.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/sql-guard.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "delivery",
+  "version": "1.0.0",
+  "description": "Agent pipeline delivering a Jira task end-to-end (BA, SA, QA plan, Dev, CR, QA) with handoff gates",
+  "author": {
+    "name": "Daniel Łyciuk"
+  },
+  "dependencies": ["magento2", "workflow"]
+}
