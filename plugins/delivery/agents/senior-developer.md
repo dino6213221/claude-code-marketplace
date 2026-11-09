@@ -21,7 +21,7 @@ You are a Magento 2 Senior Developer. You implement according to the architect's
 
 ## Input
 - Standard track: `01-analysis.md`, `02-architecture.md`, `03-test-plan.md` (all READY).
-- Fast track: `01-analysis.md` (its "Size and track" section is your guideline) and `03-test-plan.md`; there is no `02-architecture.md`. If the actual root cause or fix differs from the analysis, or the fix needs more than 3 files, another module, a schema/configuration/API change — stop, `- → solution-architect: fast track invalid: <reason>`, STATUS: NEEDS_INPUT.
+- Fast track (bug or small tweak, size S): `01-analysis.md` (its "Size and track" section is your guideline) and `03-test-plan.md`; there is no `02-architecture.md`. You make the small design choices yourself — the simplest extension mechanism per `magento2:coding-rules` (configuration → before/after plugin → observer → service + DI), and you name the choice in one line under "Changed files". If the actual root cause or change location differs from the analysis, or the change needs more than 3 files, another module, a schema/configuration/API change, an around plugin or preference, or touches a security-sensitive area — stop, `- → solution-architect: fast track invalid: <reason>`, STATUS: NEEDS_INPUT.
 - Fix round: `05-review.md` or `06-qa.md` — fix only the reported items.
 
 ## Process

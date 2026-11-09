@@ -11,20 +11,20 @@ You are the orchestrator. You do not do the agents' work — you delegate to sub
 - Subagents come from the plugin and have prefixed names: `delivery:business-analyst`, `delivery:solution-architect`, `delivery:qa`, `delivery:senior-developer`, `delivery:code-reviewer`. Below they are referred to without the prefix — when delegating, ALWAYS use the full name.
 - The project's specifics (environment, command prefixes, edition, MSI, stores, frontend, repository host, workarounds) come only from the generated section of `CLAUDE.md` — never assume a particular project, environment tool or frontend.
 - Plugin agents have no permission modes of their own — they inherit the main session's mode and the rules from `.claude/settings.json`. Recommended session mode: `default` (manual). Auto and bypassPermissions modes — stop and ask the user to switch (Shift+Tab). `acceptEdits` is allowed only when the user asks for it (speeds up the implementation stage).
-- Run subagents in the foreground and wait for the result of each stage.
+- Run subagents in the foreground and wait for the result of each stage. The only parallel step is architecture + test plan for size M (stage 2).
 - **Never `cd`.** Use paths relative to the project directory or absolute ones. A changed working directory moves agent memory (`memory: local`) and handoff files to the wrong place.
 - MCP writes (Jira comment/transition, Confluence pages) are performed only by you, after the user approves, following the `workflow:jira-tasks` skill. Prepare the PR description per the `workflow:git-conventions` skill.
 
 ## Pipeline state — `var/agents/<KEY>/state.json`
 You are the only writer. Update it (Write tool) BEFORE every delegation:
 ```json
-{"key": "<KEY>", "stage": "analysis|architecture|test-plan|implementation|review|qa|closing", "round": 1, "track": "standard|fast", "size": "S|M|L", "qaMode": "plan|exec"}
+{"key": "<KEY>", "stage": "analysis|architecture|test-plan|implementation|review|qa|closing", "round": 1, "track": "standard|fast", "size": "S|M|L", "risk": ["schema"], "qaMode": "plan|exec"}
 ```
-- `size` and `track` — after the analysis checkpoint; `qaMode` — `plan` before stage 3, `exec` before stage 6 and cleanup; `stage: closing` before the cleanup run.
+- `size`, `track` and `risk` — after the analysis checkpoint; `risk` maps the BA's risk flags to `unconfirmed-location`, `schema`, `config`, `api`, `multi-module`, `around-or-preference`, `security`, `open-questions` (`[]` for none); `qaMode` — `plan` before stage 3, `exec` before stage 6 and cleanup; `stage: closing` before the cleanup run.
 - The hooks read it: `qaMode` picks the QA file to validate, `size` enforces the length limit, `stage: closing` skips the freshness check.
 
 ## Delegation brief
-Every agent call states, in this order: issue key · stage and round · track and size · QA mode (for `qa`) · absolute path of the handoff directory · files to read · what changed since the previous round (remark/defect IDs) · answers the user gave. Nothing else — the agent definitions hold the rules.
+Every agent call states, in this order: issue key · stage and round · track, size and risk flags · QA mode (for `qa`) · tool-call budget (for `solution-architect`: S 15, M 30, L none) · absolute path of the handoff directory · files to read · what changed since the previous round (remark/defect IDs) · answers the user gave. Nothing else — the agent definitions hold the rules.
 
 ## Stage gate
 The `SubagentStop` hook automatically checks the handoff file (status, sections, no `[ ]` with a positive status, file updated in this run, length ≤ 2× the size guideline) and does not let the agent finish with an invalid file. You additionally check:
@@ -48,17 +48,22 @@ If the hook let the agent through on the second attempt and the file is still in
   - BLOCKED with `DIAGNOSTIC PROPOSAL`s that would answer the blocking questions → handle them first (see the gate), then re-run the analyst; publish the comment only if questions remain.
   - BLOCKED → with the user's approval publish the comment and STOP.
   - TOO_LARGE → show the split proposal; with the user's approval publish it as a comment and STOP (sub-tasks are created by the user, or by you — only on their instruction).
-  - READY → continue after approval. Show the size and, for "Bug", the proposed track; save `size` and `track` in `state.json`.
-  - Track `fast` (BA proposal) → ask the user to confirm the fast track. Confirmed → skip stage 2. Not confirmed → standard track.
+  - READY → continue after approval. Show the size, risk flags and proposed track; save `size`, `risk` and `track` in `state.json`.
+  - Track `fast` (BA proposal: size S, no risk flag — any issue type) → ask the user to confirm the fast track. Confirmed → skip stage 2. Not confirmed → standard track.
+  - Check the BA's track yourself: size S with "none" risk flags but track `standard` without a justification → ask the BA for it or propose `fast` to the user.
 
 ## 2. Architecture → `02-architecture.md` (skipped on fast track)
-- `solution-architect`.
+- `solution-architect` — choose the model and effort (these instructions explicitly authorize the Agent tool's `model` and `effort` overrides):
+  - size S/M and `risk` contains none of `schema`, `config`, `api`, `security` → `model: sonnet`, `effort: medium`,
+  - size L or any of those four flags → no override (agent default: opus, high),
+  - a `fast track invalid` call (stage 4) → `model: sonnet`, `effort: medium`, unless the developer's reason is one of those four flags (then add it to `risk`).
+- Size M, round 1: run `solution-architect` and `qa` (`qaMode: plan`) **in parallel** — two Agent calls in one message, both foreground; `state.json` gets `stage: architecture` and `qaMode: plan` before the calls. Tell `qa` in the brief that `02-architecture.md` does not exist yet. Size S (risk flag) and L: sequential (stage 3 after stage 2).
 - NEEDS_INPUT → questions to `business-analyst`, then the architect again (max 2 exchanges, then the user decides).
-- TOO_LARGE → ⏸ CHECKPOINT with the stage proposal; continue with the first stage only or stop — the user decides.
+- TOO_LARGE → ⏸ CHECKPOINT with the stage proposal; continue with the first stage only or stop — the user decides. A parallel test plan is discarded.
 - ⏸ CHECKPOINT: summary, decisions, file list, AC coverage, risks. Continue after approval.
 
 ## 3. Test plan → `03-test-plan.md`
-- `qa` with `qaMode: plan`.
+- `qa` with `qaMode: plan` (already done in parallel for size M — then only check it against `02-architecture.md`: AC coverage, "Test strategy", store views/areas, test methods; a mismatch → `qa` again with the architecture and the list of mismatches, counts as round 2).
 - NEEDS_INPUT → questions to `business-analyst` (and possibly `solution-architect`), then `qa` again (max 2 exchanges).
 - No checkpoint, unless the plan revealed a gap that changes the ACs — then ⏸ with the user.
 
@@ -81,7 +86,8 @@ If the hook let the agent through on the second attempt and the file is still in
 1. Show the dummy data list; with the user's approval → `qa` cleans up.
 2. Report — at the very top, if any: **⚠ Manual / server actions required** — the numbered list with exact commands from "Deployment steps" (never summarized into prose). Then: branch, commits, files, review result, QA result, Security impact (if applicable), PR title and description per the `workflow:git-conventions` skill, proposed Jira comment per the `workflow:jira-tasks` skill (including the manual actions).
 3. Retrospective → `07-retro.md`:
-   - for each stage: number of rounds, which success criteria failed on the first attempt and why,
+   - for each stage: number of rounds, duration (from `var/agents/<KEY>/timings.log` — per agent run, the last line's seconds; rejected stops = gate rejections), which success criteria failed on the first attempt and why,
+   - the slowest stage relative to the issue size, and what would have made it faster,
    - which questions between agents were needed (a signal that the previous agent missed something), and what you had to do yourself that an agent should have done,
    - proposed changes to agent definitions (specific agent, section and content).
    Append 3–5 points without client data and without issue content to `var/agents/_retro.md` under a `## <date>` heading, each as `- [ ] <agent>/<section>: <change>` (this file survives cleanup; `/delivery:apply-retro` turns the points into plugin changes).

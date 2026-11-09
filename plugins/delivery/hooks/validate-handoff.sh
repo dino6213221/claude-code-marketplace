@@ -33,6 +33,18 @@ case "$AGENT" in
   *) exit 0 ;;   # other agents (Explore, Plan, …) — no validation
 esac
 
+# Timing: one line per stop attempt in timings.log (agent, file, round, seconds since SubagentStart, ok|rejected).
+# The orchestrator reports stage durations from it in the retrospective.
+log_timing() {
+  local rc=$? start="" secs=0 result=ok
+  [ -f "$DIR/.start-$AGENT" ] && start=$(tr -dc '0-9' < "$DIR/.start-$AGENT")
+  [ -n "$start" ] && secs=$(( $(date +%s) - start ))
+  [ "$rc" -eq 0 ] || result=rejected
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$AGENT" "$FILE" "$(state .round)" "$secs" "$result" \
+    >> "$DIR/timings.log" 2>/dev/null || true
+}
+trap log_timing EXIT
+
 fail() {
   echo "Handoff file $FILE fails the gate: $1. Fix the file according to its 'Success criteria' section and the rules in CLAUDE.md (section 'Handoff files')." >&2
   # do not loop forever — on the second attempt the orchestrator decides

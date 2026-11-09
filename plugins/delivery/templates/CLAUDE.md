@@ -79,7 +79,11 @@
   - **S** — bug or small tweak, 1 module, ≤ 3 files, no schema / new configuration / API contract change,
   - **M** — up to 2 modules or ≤ 15 files,
   - **L** — larger (usually TOO_LARGE → split).
-- **Fast track** (only "Bug", size S, root cause located in code, fix is obvious, no open questions): the Solution Architect is skipped; the developer works from the "Size and track" section of `01-analysis.md`. The user approves the fast track at the analysis checkpoint.
+- **Risk flags** — the business analyst lists them in "Size and track" for every issue (or "none"):
+  change location not confirmed in code · schema / new configuration / API or GraphQL contract change · more than one module · likely around plugin or preference · security-sensitive area (auth, payment, ACL, customer data, encryption) · open questions.
+- **Fast track** (size S — bug or small tweak — with no risk flag): the Solution Architect is skipped; the developer works from the "Size and track" section of `01-analysis.md`. The user approves the track at the analysis checkpoint. The developer reports `fast track invalid` when the change turns out bigger → standard track.
+- **Standard track effort** — the orchestrator scales the Solution Architect to the issue: size M (or S with a risk flag) without schema/API/security flags → lighter model and effort; size L or a schema/API/security flag → full model and effort. The architect starts from the code locations in `01-analysis.md` instead of exploring from scratch.
+- **Timing** — the `SubagentStop` hook appends one line per agent stop to `var/agents/<KEY>/timings.log` (agent, file, round, seconds since start, ok/rejected); the retrospective reports stage durations from it.
 - Brevity — write only what the next agent needs to act:
   - omit sections that do not apply (always keep `STATUS`, `## Success criteria`, `## Open questions`); do not write "not applicable" paragraphs,
   - success criteria that do not apply: `- [x] n/a — <criterion>`, no explanation,

@@ -45,10 +45,10 @@ Tests (require `jq`): `bash plugins/delivery/tests/hooks.sh` (guards and handoff
 |-------|----------|-------|
 | Agents | `plugins/delivery/agents/` | Preloaded skills (verified to load with plugin prefix): BA `workflow:jira-tasks`; SA `magento2:coding-rules`; Dev `magento2:coding-rules`, `workflow:git-conventions` (+ `magento2:module-readme` on demand); CR `magento2:coding-rules`, `workflow:git-conventions`; QA `magento2:verify-change` |
 | Project config | `.claude/delivery.json` (written by init) | `magentoRoot`, `env` (`warden`\|`reward`\|`ddev`\|`custom`\|`native`), `exec` + `db` + `envName` (custom), `baseUrl`, `mailUrl`, `edition`, `msi`, `multiStore`, `frontend`, `php`, `language` (handoff prose; headings stay English), `vcsHost`, `vcsRepo`, `envWorkarounds` (lines for CLAUDE.md, `{{EXEC}}` allowed), `extraAllow` / `extraDeny` (extra permission rules); only `magentoRoot` and `env` are required; handoff dir = `<magentoRoot>/var/agents/` |
-| Pipeline state | `var/agents/<KEY>/state.json` (orchestrator only) | `stage`, `round`, `track`, `size`, `qaMode` — read by the hooks and `/delivery:status` |
+| Pipeline state | `var/agents/<KEY>/state.json` (orchestrator only) | `stage`, `round`, `track`, `size`, `risk`, `qaMode` — read by the hooks and `/delivery:status` |
 | Generators | `magento2-detect` (from `magento2`), `scripts/render.sh` | Detection and rendering of `templates/settings.json`, `templates/CLAUDE.md`, `templates/retired-rules.json` (`{{EXEC}}` etc.); fails on an unreplaced placeholder |
 | Start marker | `hooks/subagent-start.sh` (SubagentStart) | Writes `var/agents/<KEY>/.start-<agent>` so the gate can tell a fresh file from one left over from an earlier round |
-| Handoff gate | `hooks/validate-handoff.sh` (SubagentStop) | Rejects a handoff file with wrong status, missing sections (English or 1.0.x Polish headings), unchecked criteria on a positive status, not updated in this run, or longer than 2× the size guideline. Second attempt passes — the orchestrator decides |
+| Handoff gate | `hooks/validate-handoff.sh` (SubagentStop) | Rejects a handoff file with wrong status, missing sections (English or 1.0.x Polish headings), unchecked criteria on a positive status, not updated in this run, or longer than 2× the size guideline. Second attempt passes — the orchestrator decides. Appends every stop (agent, file, round, seconds, ok/rejected) to `var/agents/<KEY>/timings.log` for the retrospective |
 | Bash guards | `hooks/pre-bash.sh` (PreToolUse Bash, shared helpers in `hooks/lib.sh`) | **git-guard** — every `git`/`gh` blocked for `delivery:business-analyst` and `delivery:solution-architect`. **sql-guard** — `delivery:qa` only: DROP/TRUNCATE/ALTER, DELETE/UPDATE without WHERE, SQL writes not targeting `QA-` records, SQL from files, DB access from inline PHP. **push-guard** — every session in an initialized project: push to `master`/`main` via any refspec, force, `+refspec`, `--mirror`, `--all`, `--prune`. Defense in depth on top of the settings rules, not a sandbox |
 | Playwright MCP | provided by `magento2` | used by `delivery:qa` via `mcp__plugin_magento2_playwright__*` |
 | Project settings | `templates/` | Rendered and merged by `/delivery:init` (plugins cannot ship project permissions or CLAUDE.md) |
@@ -56,7 +56,10 @@ Tests (require `jq`): `bash plugins/delivery/tests/hooks.sh` (guards and handoff
 ### Size, fast track, brevity
 
 - BA assigns size S / M / L; every agent scales its handoff file to it (guideline: S ≤ 30 lines, M ≤ 80).
-- Fast track: "Bug" + size S + root cause located in code + obvious fix → BA proposes, user confirms at the analysis checkpoint, Solution Architect is skipped. Developer reports `fast track invalid` if the fix turns out bigger → standard track.
+- BA also locates the change in code and lists risk flags (unconfirmed location, schema, config, API, more than one module, around plugin/preference, security-sensitive area, open questions).
+- Fast track: size S (bug or small tweak) + no risk flag → BA proposes, user confirms at the analysis checkpoint, Solution Architect is skipped; the developer makes the small design choice. Developer reports `fast track invalid` if the change turns out bigger → standard track.
+- Standard track: the orchestrator runs the Solution Architect on `sonnet`/`medium` for S/M without schema/config/API/security flags, `opus`/`high` otherwise; the architect starts from the BA's code location and has a tool-call budget (S 15, M 30). Size M: architecture and test plan run in parallel, the plan is reconciled with the architecture afterwards.
+- Retrospective reports stage durations from `timings.log`.
 - Sections that don't apply are omitted; non-applicable criteria are `[x] n/a`. QA tests only what the change can break (size S: typically 2–5 cases).
 
 ### Git, access requests, manual actions

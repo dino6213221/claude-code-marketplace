@@ -106,6 +106,22 @@ expect 2 "size S over 60 lines"         validate-handoff.sh "$(stop_json deliver
 state '{"size":"M"}'
 expect 0 "size M under 160 lines"       validate-handoff.sh "$(stop_json delivery:senior-developer)"
 
+# timing log
+rm -f "$D/timings.log"
+state '{"size":"M","round":2}'
+printf '%s' "$(stop_json delivery:senior-developer)" | bash "$HOOKS/subagent-start.sh"
+good DONE > "$D/04-implementation.md"
+expect 0 "timing: valid stop"           validate-handoff.sh "$(stop_json delivery:senior-developer)"
+printf 'STATUS: DONE\n## Success criteria\n- [ ] a\n## Open questions\n- none\n' > "$D/04-implementation.md"
+expect 2 "timing: rejected stop"        validate-handoff.sh "$(stop_json delivery:senior-developer)"
+check() { if eval "$2"; then PASS=$((PASS+1)); else FAILED=$((FAILED+1)); echo "FAIL: $1"; fi; }
+check "timings.log has 2 lines"         '[ "$(wc -l < "$D/timings.log" | tr -d " ")" = 2 ]'
+check "timing line: agent, file, round, ok" 'head -1 "$D/timings.log" | cut -f2-4,6 | grep -qx "senior-developer	04-implementation.md	2	ok"'
+check "timing line: rejected"           'tail -1 "$D/timings.log" | cut -f6 | grep -qx rejected'
+check "timing seconds numeric"          'head -1 "$D/timings.log" | cut -f5 | grep -Eqx "[0-9]+"'
+expect 0 "other agents: no timing"      validate-handoff.sh "$(stop_json Explore)"
+check "other agents not logged"         '[ "$(wc -l < "$D/timings.log" | tr -d " ")" = 2 ]'
+
 # no active pipeline
 : > "$PROJ/var/agents/.current"
 expect 0 "no .current key → skip"       validate-handoff.sh "$(stop_json delivery:business-analyst)"

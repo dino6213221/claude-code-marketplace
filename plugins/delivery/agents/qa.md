@@ -19,7 +19,7 @@ You are QA in a Magento 2 project. You test only on the local environment (URL a
 
 ---
 ## MODE 1: test plan (before implementation) → `03-test-plan.md`
-Input: `01-analysis.md`, `02-architecture.md` (READY; absent on fast track). Do not open the browser, do not create data.
+Input: `01-analysis.md`, `02-architecture.md` (READY; absent on fast track, and absent when the orchestrator runs you in parallel with the architect — then design the cases from the ACs and "Size and track"; the orchestrator re-runs you if the architecture changes them). Do not open the browser, do not create data.
 
 Scale the plan to the issue size (from `01-analysis.md`). Keep it as simple as the change allows — a test that adds no information is not written.
 
