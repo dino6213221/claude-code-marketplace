@@ -1,6 +1,6 @@
 {
   "name": "delivery",
-  "version": "1.2.0",
+  "version": "1.6.0",
   "description": "Agent pipeline delivering a Jira task end-to-end (BA, SA, QA plan, Dev, CR, QA) with handoff gates",
   "author": {
     "name": "Daniel Łyciuk"

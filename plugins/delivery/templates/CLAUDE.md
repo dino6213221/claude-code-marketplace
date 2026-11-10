@@ -33,46 +33,29 @@
 ## Security and data
 - Secrets only through 1Password (`op run`, `op read "op://Vault/Item/field"`). Never output passwords/tokens in files, commands, commits or Jira.
 - Client data is confidential. Do not paste raw database rows or logs into Jira, PRs or handoff files — summarize and pseudonymize.
-- MCP: the pipeline uses only the servers shipped with this marketplace — Atlassian (Jira/Confluence) from the `workflow` plugin (`mcp__plugin_workflow_atlassian__*`) and Playwright from the `magento2` plugin (`mcp__plugin_magento2_playwright__*`, used by QA). Do not use Atlassian tools from other sources (project server, connector, other plugins) in the pipeline. Allow-listed read tools work without prompts; every write to an external system needs the user's approval. New MCP server → first check it is on the "Approved Tools" list; pin the version exactly (no `@latest`).
+- MCP: the pipeline uses only the servers shipped with this marketplace — Atlassian (Jira/Confluence, `mcp__plugin_workflow_atlassian__*`) for the Business Analyst and the orchestrator only; the other agents work from `01-analysis.md` and ask the BA — and Playwright from the `magento2` plugin (`mcp__plugin_magento2_playwright__*`, used by QA). Do not use Atlassian tools from other sources (project server, connector, other plugins) in the pipeline. Allow-listed read tools work without prompts; every write to an external system needs the user's approval. New MCP server → first check it is on the "Approved Tools" list; pin the version exactly (no `@latest`).
 - Destructive operations (DROP/TRUNCATE, DELETE/UPDATE without WHERE, `rm -rf`, force-push, `reset --hard`, skipping hooks) → require the user's confirmation naming the environment.
 - Business rules: Jira/Confluence are the source. Code = current behavior, Confluence/Jira = intended behavior. Divergence → report it, do not resolve it yourself. Never invent rules.
 
-## Git: commit, push, pull request
-- Repository host: {{VCS}}.
-- **Business Analyst and Solution Architect: no git commands at all** (not even read-only) — enforced by the plugin's guard hook.
-- **Senior Developer, Code Reviewer, QA: may propose git actions; nothing that changes the repository runs without the user's approval.** The developer's commit runs through an approval prompt; Code Reviewer and QA do not change the repository — they put proposals in "Open questions" as `- → user: GIT PROPOSAL — <exact command> · why: <reason>`, and the orchestrator asks the user.
-- Commit, push and pull request are allowed ONLY with the user's approval (each one shows an approval prompt) and ONLY according to the `workflow:git-conventions` skill: branch `<type>/<KEY>-<description>`, commit message `<KEY> <max 2 sentences>`, PR description max 2 sentences (+ a `Security impact` section when the change touches auth, secrets, encryption, logging/audit, backups or access control). No co-author lines or other footers.
-- Push only the issue branch, never `--force`, never to `master`/`main` (blocked in settings and by the plugin's push guard, including refspecs such as `HEAD:master`). Never `--no-verify`.
-- The developer commits; push and PR are done by the orchestrator at closing. The PR target branch is confirmed with the user.
+## Git
+- Repository host: {{VCS}}. Business Analyst and Solution Architect run no git commands (guard hook). Nothing that changes the repository runs without the user's approval; only the developer commits, the orchestrator pushes and opens the PR at closing — all per the `workflow:git-conventions` skill. Never `--force`, `--no-verify`, or push to `master`/`main` — the git `pre-push` hook installed by `/delivery:init` rejects both for everyone in this clone.
+- Never stash, reset or discard uncommitted changes that belong to another issue — report them.
+- Git action needed by an agent that may not run it → `- → user: GIT PROPOSAL — <exact command> · why: <reason>` in "Open questions".
 
-## Access requests (MCP, servers, tools)
-- An agent may request access it needs (an MCP server, a server/environment, a CLI tool, credentials). Agents never configure access or obtain credentials themselves.
-- Request format in `## Open questions`:
-  `- → user: ACCESS REQUEST — <what: MCP server / host / tool> · scope: <read | write> · why: <what it unblocks> · without it: <fallback or what stays unverified>`
-- A request that blocks the work is a blocking question. The orchestrator relays it to the user; the user grants it or declines, and the agent continues or uses the fallback.
+## Access requests
+- Missing access (MCP server, host, tool, credentials) → `- → user: ACCESS REQUEST — <what> · scope: <read | write> · why: <what it unblocks> · without it: <fallback>` in "Open questions". Agents never configure access or obtain credentials themselves.
 
 ## Manual / server actions
-- Every action needed beyond deploying the code must be stated explicitly — never implied. Examples: `bin/magento` commands (setup:upgrade, indexer:reindex, cache, config:set, queue consumers), one-off scripts, cron changes, admin configuration, data imports, environment variables, third-party/server configuration.
-- Format — a numbered list, one action per item, in execution order:
-  `1. <where: environment + place (container / admin / server)> — <exact command or click path> — <once | every deploy> — <expected result>`
-- No such actions → the single line "Manual actions: none — code deploy only."
-- The orchestrator puts these actions at the top of the final report and in the proposed Jira comment.
+- Every action beyond deploying the code (bin/magento commands, scripts, cron, admin configuration, imports, env variables, third-party config) is stated explicitly as a numbered list in execution order:
+  `1. <where: environment + place> — <exact command or click path> — <once | every deploy> — <expected result>`
+- None → the single line "Manual actions: none — code deploy only."
 
 ## Handoff files
-- Directory: `{{MAGENTO_ROOT}}/var/agents/<KEY>/` (ignored by git). Every `var/agents/...` path in the agent and orchestrator definitions means `{{MAGENTO_ROOT}}/var/agents/...` relative to the project directory.
-- `var/agents/.current` holds the current issue key; `var/agents/<KEY>/state.json` holds the pipeline state (`stage`, `round`, `track`, `size`, `qaMode`). Both are written only by the orchestrator and read by the validation hooks.
-- Files and allowed statuses:
-  - `01-analysis.md` — READY | BLOCKED | TOO_LARGE
-  - `02-architecture.md` — READY | NEEDS_INPUT | TOO_LARGE
-  - `03-test-plan.md` — READY | NEEDS_INPUT
-  - `04-implementation.md` — DONE | NEEDS_INPUT
-  - `05-review.md` — APPROVED | CHANGES_REQUESTED
-  - `06-qa.md` — PASS | FAIL
-  - `07-retro.md` — (no status)
+- Directory: `{{MAGENTO_ROOT}}/var/agents/<KEY>/` (ignored by git). Every `var/agents/...` path in the agent and orchestrator definitions means `{{MAGENTO_ROOT}}/var/agents/...` relative to the project directory. `state.json`, `.current` and `.sessions/` belong to the orchestrator and the hooks.
+- Files and allowed statuses: `01-analysis.md` READY|BLOCKED|TOO_LARGE · `02-architecture.md` READY|NEEDS_INPUT|TOO_LARGE · `03-test-plan.md` READY|NEEDS_INPUT · `04-implementation.md` DONE|NEEDS_INPUT · `05-review.md` APPROVED|CHANGES_REQUESTED · `06-qa.md` PASS|FAIL · `07-retro.md` (no status).
 - Every file starts with the line `STATUS: <value>`, has a `## Success criteria` section (checklist `[x]`/`[ ]`) and `## Open questions` in the format `- → <agent>: <question>` (or "none"). Headings and statuses stay exactly as written here (English); prose is written in {{LANGUAGE}}.
-- The `SubagentStop` hook rejects: a positive status with any `[ ]`, a file not updated during the agent's run (left over from an earlier round), and a file over twice the size guideline (S > 60 lines, M > 160).
-- QA evidence: QA records Playwright screenshot paths and result summaries in `06-qa.md`.
-- After the issue is closed, the `var/agents/<KEY>/` directory is deleted (`var/agents/_retro.md` stays).
+- The `SubagentStop` hook rejects: a positive status with any `[ ]`, a file not updated during the agent's run, and a file over twice the size guideline (S > 60 lines, M > 160).
+- Read only the handoff files your brief lists; in a fix round read only the sections the brief names (remark/defect IDs) plus your own previous file.
 
 ## Size, track and brevity
 - The business analyst assigns a size to every issue; all agents scale their work and output to it:
@@ -81,9 +64,7 @@
   - **L** — larger (usually TOO_LARGE → split).
 - **Risk flags** — the business analyst lists them in "Size and track" for every issue (or "none"):
   change location not confirmed in code · schema / new configuration / API or GraphQL contract change · more than one module · likely around plugin or preference · security-sensitive area (auth, payment, ACL, customer data, encryption) · open questions.
-- **Fast track** (size S — bug or small tweak — with no risk flag): the Solution Architect is skipped; the developer works from the "Size and track" section of `01-analysis.md`. The user approves the track at the analysis checkpoint. The developer reports `fast track invalid` when the change turns out bigger → standard track.
-- **Standard track effort** — the orchestrator scales the Solution Architect to the issue: size M (or S with a risk flag) without schema/API/security flags → lighter model and effort; size L or a schema/API/security flag → full model and effort. The architect starts from the code locations in `01-analysis.md` instead of exploring from scratch.
-- **Timing** — the `SubagentStop` hook appends one line per agent stop to `var/agents/<KEY>/timings.log` (agent, file, round, seconds since start, ok/rejected); the retrospective reports stage durations from it.
+- **Fast track** (size S — bug or small tweak — with no risk flag): the Solution Architect and the separate test plan are skipped; the developer works from the "Size and track" section of `01-analysis.md`, QA derives the cases from the ACs at execution. The user approves the track at the analysis checkpoint. The developer reports `fast track invalid` when the change turns out bigger → standard track.
 - Brevity — write only what the next agent needs to act:
   - omit sections that do not apply (always keep `STATUS`, `## Success criteria`, `## Open questions`); do not write "not applicable" paragraphs,
   - success criteria that do not apply: `- [x] n/a — <criterion>`, no explanation,
@@ -92,6 +73,5 @@
   - guideline per handoff file: S ≤ 30 lines, M ≤ 80 lines, L as needed.
 
 ## Agent memory
-- Solution Architect and Code Reviewer have `local` memory in `<project directory>/.claude/agent-memory-local/` (outside git, per project — so knowledge about one client never reaches another). Never under `var/agents/` — that directory is deleted at closing.
-- Store only technical knowledge about the project in memory (conventions, pitfalls, recurring remarks). Never client data, personal data or secrets.
+- `local` memory lives only in `<project directory>/.claude/agent-memory-local/` (never under `var/agents/`). Technical project knowledge only — never client data, personal data or secrets.
 <!-- delivery:end -->

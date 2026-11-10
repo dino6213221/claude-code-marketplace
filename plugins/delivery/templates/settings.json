@@ -7,6 +7,8 @@
     "allow": [
       "Bash(magento2-detect *)",
       "Edit(**/var/agents/**)",
+      "Edit(**/.claude/agent-memory-local/**)",
+      "Bash(bash *delivery*/scripts/stats.sh *)",
       "Bash(git status*)",
       "Bash(git diff *)",
       "Bash(git log *)",

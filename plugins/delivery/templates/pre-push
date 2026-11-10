@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# delivery pre-push hook (installed by /delivery:init) — the authoritative push check.
+# Git runs it with the RESOLVED refs, so quoting, aliases, subshells or refspec tricks cannot bypass it.
+# Rejects: any push to refs/heads/master or refs/heads/main (update or delete), and non-fast-forward
+# (force) updates of any branch. Deleting other branches is allowed.
+# stdin lines: <local ref> <local sha> <remote ref> <remote sha>
+# A person who really must do one of these does it consciously outside the pipeline
+# (agents are denied --no-verify by the project's settings and the push guard).
+# delivery-pre-push v1
+ZERO=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+FAIL=""
+REFS=$(cat)
+while read -r LREF LSHA RREF RSHA; do
+  [ -n "$RREF" ] || continue
+  case "$RREF" in
+    refs/heads/master|refs/heads/main)
+      FAIL="${FAIL}push to ${RREF#refs/heads/} is not allowed — push the issue branch and open a pull request.\n"
+      continue ;;
+  esac
+  # new branch or deletion: nothing to compare
+  [ "$RSHA" = "$ZERO" ] && continue
+  [ "$LSHA" = "$ZERO" ] && continue
+  if ! git cat-file -e "$RSHA^{commit}" 2>/dev/null; then
+    FAIL="${FAIL}${RREF#refs/heads/} on the remote has commits you do not have — fetch and rebase/merge first (force push is not allowed).\n"
+    continue
+  fi
+  git merge-base --is-ancestor "$RSHA" "$LSHA" 2>/dev/null \
+    || FAIL="${FAIL}non-fast-forward (force) push to ${RREF#refs/heads/} is not allowed.\n"
+done <<< "$REFS"
+if [ -n "$FAIL" ]; then
+  printf 'delivery pre-push: %b' "$FAIL" >&2
+  exit 1
+fi
+# chain an existing project hook kept by /delivery:init as pre-push.local
+LOCAL="$(dirname "$0")/pre-push.local"
+if [ -x "$LOCAL" ]; then
+  printf '%s\n' "$REFS" | "$LOCAL" "$@"
+  exit $?
+fi
+exit 0

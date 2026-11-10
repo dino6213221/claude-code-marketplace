@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # PreToolUse (Bash) — one dispatcher for all delivery guards (plugin hooks fire for EVERY Bash call):
 #   git-guard  — delivery:business-analyst / delivery:solution-architect: no git/gh at all
-#   sql-guard  — delivery:qa: no destructive SQL, no SQL writes outside QA- records, no SQL from files / PHP
+#   sql-guard  — delivery:qa: no destructive SQL, SQL writes only on QA- records with a strict WHERE,
+#                no SQL from files, pipes, substitutions or PHP scripts with raw DB access
 #   push-guard — any session in a project initialized by /delivery:init: no push to master/main,
-#                no force / mirror / all (closes refspec bypasses such as `git push origin HEAD:master`)
+#                no force / mirror / all, no aliases or substitutions inside git push
+# Defense in depth — not a sandbox. The authoritative push check is the git pre-push hook
+# installed by /delivery:init (templates/pre-push), which sees the resolved refs.
 # Exit 2 = command blocked; stderr goes back to the agent.
 INPUT=$(cat)
 . "$(dirname "$0")/lib.sh"
@@ -22,76 +25,123 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')
 
 block() { echo "Blocked by delivery $1" >&2; exit 2; }
 
+# Normalized command: quotes, backslashes, parentheses, braces and backticks removed,
+# so `"git"`, `mas""ter`, `(git push …)` and `$(which git)` read as plain words.
+NORM=$(printf '%s' "$CMD" | tr -d "\"'\\\\(){}\`")
+
 # ---------- git-guard ----------
-if [ "$GUARD_GIT" = 1 ] && echo "$CMD" | grep -Eq '(^|[^[:alnum:]_./-])(git|gh)([[:space:]]|$)'; then
+if [ "$GUARD_GIT" = 1 ] && printf '%s' "$NORM" | grep -Eq '(^|[^[:alnum:]_.-])(git|gh)([[:space:];|&]|$)'; then
   block "git-guard: this agent may not run git commands. Read the code with Read/Grep/Glob; if repository history is needed, add a question to 'Open questions'."
 fi
 
 # ---------- sql-guard ----------
 if [ "$GUARD_SQL" = 1 ]; then
-  UP=$(echo "$CMD" | tr '[:lower:]' '[:upper:]')
-  HINT="Create and delete dummy data through the Magento API/scripts, by specific IDs from the 'Dummy data' table."
-  # database clients: mysql/mariadb, `warden|reward db connect`, n98-magerun2 db:query/db:console, the project's own `db` command (env custom)
+  UP=$(printf '%s' "$CMD" | tr '[:lower:]' '[:upper:]')
+  HINT="Create and delete dummy data through the Magento API/CLI, or with one inline statement per record set: ... WHERE <column> = 'QA-<KEY>-…' (or LIKE 'QA-<KEY>-%')."
+  # database clients: mysql/mariadb, `warden|reward db connect`, ddev mysql, n98-magerun2 db:query/db:console, the project's own `db` command
   DBCLI='\b(MYSQL|MARIADB)\b|\bDB +CONNECT\b|\bDB:(QUERY|CONSOLE)\b'
   if [ -f "$DELIVERY_JSON" ]; then
     CUSTOM_DB=$(jq -r '.db // empty' "$DELIVERY_JSON" 2>/dev/null | tr '[:lower:]' '[:upper:]')
     [ -n "$CUSTOM_DB" ] && DBCLI="$DBCLI|$(printf '%s' "$CUSTOM_DB" | sed 's/[][\.*^$(){}+?|/]/\\&/g')"
   fi
-  echo "$UP" | grep -Eq '\b(DROP|TRUNCATE|ALTER)\b' && block "sql-guard: DROP/TRUNCATE/ALTER. $HINT"
-  if echo "$UP" | grep -Eq '\bDELETE\s+FROM\b|\bUPDATE\s+\S+\s+SET\b'; then
-    echo "$UP" | grep -Eq '\bWHERE\b' || block "sql-guard: DELETE/UPDATE without WHERE. $HINT"
-  fi
-  if echo "$UP" | grep -Eq "$DBCLI"; then
-    # SQL from a file cannot be checked — statements must be inline
-    echo "$CMD" | grep -Eq '(^|[^<])<[[:space:]]*[^<([:space:]]|\bsource\b|\\\.[[:space:]]' \
-      && block "sql-guard: SQL read from a file — put the statements inline (-e \"...\") so they can be checked. $HINT"
-    if echo "$UP" | grep -Eq '\b(INSERT|UPDATE|DELETE|REPLACE)\b'; then
-      echo "$CMD" | grep -q 'QA-' || block "sql-guard: SQL write not targeting records with the QA- prefix. $HINT"
+  printf '%s' "$UP" | grep -Eq '\b(DROP|TRUNCATE|ALTER|RENAME +TABLE|GRANT|REVOKE)\b' && block "sql-guard: DROP/TRUNCATE/ALTER/RENAME/GRANT. $HINT"
+
+  if printf '%s' "$UP" | grep -Eq "$DBCLI"; then
+    # SQL must be inline and literal: no files, pipes, substitutions, client commands
+    printf '%s' "$CMD" | grep -Eq '(^|[^<])<[[:space:]]*[^<([:space:]]' && block "sql-guard: SQL read from a file — put the statements inline (-e \"...\"). $HINT"
+    printf '%s' "$UP" | grep -Eq "\\|[^|]*($DBCLI)" && block "sql-guard: SQL piped into the database client — put the statements inline (-e \"...\"). $HINT"
+    printf '%s' "$CMD" | grep -Eq '\$\(|`' && block "sql-guard: command substitution in a database command — write the SQL literally. $HINT"
+    printf '%s' "$UP" | grep -Eq '\bSOURCE\b|\\\.[[:space:]]|\\!' && block "sql-guard: mysql client commands (SOURCE, \\., \\!) are not allowed. $HINT"
+
+    if printf '%s' "$UP" | grep -Eq '\b(INSERT|UPDATE|DELETE|REPLACE|LOAD +DATA)\b'; then
+      printf '%s' "$UP" | grep -Eq -- "-- |#|/\\*" && block "sql-guard: comments are not allowed in SQL writes. $HINT"
+      printf '%s' "$UP" | grep -Eq ';[[:space:]]*[A-Z]' && block "sql-guard: one write statement per command. $HINT"
+      printf '%s' "$UP" | grep -Eq '\bLOAD +DATA\b' && block "sql-guard: LOAD DATA is not allowed. $HINT"
+      if printf '%s' "$UP" | grep -Eq '\b(UPDATE|DELETE)\b'; then
+        printf '%s' "$UP" | grep -Eq '\bDELETE\s+\S+\s+FROM\b|\bDELETE\s+FROM\s+\S+\s*,|\bUPDATE\s+\S+(\s+\S+)?\s*,|\bJOIN\b|\bUSING\b' \
+          && block "sql-guard: multi-table UPDATE/DELETE is not allowed. $HINT"
+        printf '%s' "$UP" | grep -Eq '\bWHERE\b' || block "sql-guard: DELETE/UPDATE without WHERE. $HINT"
+        WH=${UP#*WHERE}
+        printf '%s' "$WH" | grep -Eq "'QA-" || block "sql-guard: the WHERE clause does not target a 'QA-…' value. $HINT"
+        printf '%s' "$WH" | grep -Eq '\bOR\b|\bNOT\b|<>|!=|\b1 *= *1\b|\bTRUE\b' && block "sql-guard: OR / NOT / always-true conditions are not allowed in a QA write. $HINT"
+      else
+        printf '%s' "$UP" | grep -q "'QA-" || block "sql-guard: INSERT/REPLACE without a 'QA-…' value. $HINT"
+      fi
+    fi
+  else
+    # DELETE/UPDATE through any other channel still needs a WHERE
+    if printf '%s' "$UP" | grep -Eq '\bDELETE\s+FROM\b|\bUPDATE\s+\S+\s+SET\b'; then
+      printf '%s' "$UP" | grep -Eq '\bWHERE\b' || block "sql-guard: DELETE/UPDATE without WHERE. $HINT"
     fi
   fi
-  # raw DB access from inline PHP bypasses the checks above
-  echo "$UP" | grep -Eq '\bPHP\b.*(-R|-A)\b' && echo "$UP" | grep -Eq 'PDO|MYSQLI|->QUERY\(|->EXEC\(|RESOURCECONNECTION' \
+
+  # raw DB access from PHP — inline (-r / -a) or from a script file
+  RAWDB='PDO|MYSQLI|->QUERY\(|->EXEC\(|RESOURCECONNECTION|GETCONNECTION\('
+  printf '%s' "$UP" | grep -Eq '\bPHP\b.*(-R|-A)\b' && printf '%s' "$UP" | grep -Eq "$RAWDB" \
     && block "sql-guard: raw database access from inline PHP. $HINT"
+  for F in $(printf '%s' "$NORM" | grep -Eo '\bphp[[:space:]]+[^-[:space:]][^[:space:]]*\.php\b' | awk '{print $2}'); do
+    MR=$(jq -r '.magentoRoot // "."' "$DELIVERY_JSON" 2>/dev/null || echo .)
+    case "$F" in /*) P="$F" ;; *) P="$PROJECT_DIR/$F"; [ -f "$P" ] || P="$PROJECT_DIR/$MR/$F" ;; esac
+    [ -f "$P" ] && tr '[:lower:]' '[:upper:]' < "$P" | grep -Eq "$RAWDB" \
+      && block "sql-guard: PHP script '$F' accesses the database directly. $HINT"
+  done
 fi
 
 # ---------- push-guard ----------
 if [ "$GUARD_PUSH" = 1 ]; then
   current_branch() { git -C "$PROJECT_DIR" branch --show-current 2>/dev/null; }
   is_protected() { case "$1" in master|main) return 0 ;; *) return 1 ;; esac; }
-  # split into simple commands on ; && || | and newlines, then inspect every `git … push …`
+  # split into simple commands on ; && || | & and newlines, then inspect every `git … push …`
   # (awk, not sed: BSD sed on macOS does not turn \n into a newline)
-  echo "$CMD" | awk '{gsub(/&&|\|\||;|\|/, "\n"); print}' | while IFS= read -r SEG; do
+  push_scan() {
+  printf '%s\n' "$NORM" | awk '{gsub(/&&|\|\||;|\||&/, "\n"); print}' | while IFS= read -r SEG; do
     read -ra T <<< "$SEG"
     i=0; n=${#T[@]}
     while [ $i -lt $n ] && [ "${T[$i]##*/}" != "git" ]; do i=$((i+1)); done
     [ $i -lt $n ] || continue
-    while [ $i -lt $n ] && [ "${T[$i]}" != "push" ]; do i=$((i+1)); done
-    [ $i -lt $n ] || continue
+    i=$((i+1))
+    # git global options before the subcommand
+    while [ $i -lt $n ]; do
+      case "${T[$i]}" in
+        -c) case "${T[$((i+1))]:-}" in alias.*|push.*|remote.*|url.*|core.hookspath*|core.hooksPath*)
+              echo "push-guard: 'git -c ${T[$((i+1))]}' is not allowed"; exit 0 ;; esac
+            i=$((i+2)) ;;
+        -C|--git-dir|--work-tree|--namespace|--exec-path|--config-env) i=$((i+2)) ;;
+        -*) i=$((i+1)) ;;
+        *) break ;;
+      esac
+    done
+    [ "${T[$i]:-}" = "push" ] || continue
+    printf '%s' "$CMD" | grep -Eq '\$\(|`' && { echo "push-guard: command substitution inside git push is not allowed"; exit 0; }
     i=$((i+1)); POS=0; REFSPECS=0
     while [ $i -lt $n ]; do
-      A="${T[$i]}"; A="${A%\"}"; A="${A#\"}"; A="${A%\'}"; A="${A#\'}"
+      A="${T[$i]}"
       case "$A" in
-        --force*|-f|--mirror|--all|--prune) echo "push-guard: '$A' is not allowed"; exit 3 ;;
+        --force*|--mirror|--all|--prune) echo "push-guard: '$A' is not allowed"; exit 0 ;;
+        --no-verify) echo "push-guard: '--no-verify' is not allowed"; exit 0 ;;
         -o|--push-option|--repo|--receive-pack|--exec) i=$((i+1)) ;;
+        --*) ;;
+        -*f*) echo "push-guard: force flag in '$A' is not allowed"; exit 0 ;;
         -*) ;;
         *)
           POS=$((POS+1))
           if [ $POS -gt 1 ]; then
             REFSPECS=$((REFSPECS+1))
-            case "$A" in +*) echo "push-guard: force refspec '$A' is not allowed"; exit 3 ;; esac
+            case "$A" in +*) echo "push-guard: force refspec '$A' is not allowed"; exit 0 ;; esac
             DST="${A##*:}"; DST="${DST#refs/heads/}"
-            [ "$DST" = "HEAD" ] || [ "$DST" = "@" ] && DST=$(current_branch)
-            is_protected "$DST" && { echo "push-guard: push to '$DST' is not allowed"; exit 3; }
+            { [ "$DST" = "HEAD" ] || [ "$DST" = "@" ]; } && DST=$(current_branch)
+            is_protected "$DST" && { echo "push-guard: push to '$DST' is not allowed"; exit 0; }
           fi ;;
       esac
       i=$((i+1))
     done
     # no refspec → pushes the current branch
     if [ $REFSPECS -eq 0 ] && is_protected "$(current_branch)"; then
-      echo "push-guard: the current branch is $(current_branch) — push only the issue branch"; exit 3
+      echo "push-guard: the current branch is $(current_branch) — push only the issue branch"; exit 0
     fi
-  done > "${TMPDIR:-/tmp}/delivery-push-guard.$$"
-  MSG=$(cat "${TMPDIR:-/tmp}/delivery-push-guard.$$" 2>/dev/null); rm -f "${TMPDIR:-/tmp}/delivery-push-guard.$$"
+  done
+  }
+  MSG=$(push_scan)
   [ -n "$MSG" ] && block "$MSG. Push only the issue branch, without force (see CLAUDE.md, section 'Git')."
 fi
 exit 0

@@ -7,6 +7,7 @@ INPUT=$(cat)
 command -v jq >/dev/null || { echo 'validate-handoff: jq missing — validation skipped, only the orchestrator checks the gate.' >&2; exit 0; }
 AGENT=$(agent_short "$(echo "$INPUT" | jq -r '.agent_type // empty')")
 ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
+SID=$(input_sid "$INPUT")
 KEY=$(current_key)
 [ -n "$KEY" ] || exit 0          # no active pipeline (e.g. BA mode A: the orchestrator clears .current)
 DIR="$(agents_dir)/$KEY"
@@ -40,6 +41,7 @@ log_timing() {
   [ -f "$DIR/.start-$AGENT" ] && start=$(tr -dc '0-9' < "$DIR/.start-$AGENT")
   [ -n "$start" ] && secs=$(( $(date +%s) - start ))
   [ "$rc" -eq 0 ] || result=rejected
+  [ -n "${PASSED_THROUGH:-}" ] && result=failed-passed-through
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$AGENT" "$FILE" "$(state .round)" "$secs" "$result" \
     >> "$DIR/timings.log" 2>/dev/null || true
 }
@@ -48,7 +50,7 @@ trap log_timing EXIT
 fail() {
   echo "Handoff file $FILE fails the gate: $1. Fix the file according to its 'Success criteria' section and the rules in CLAUDE.md (section 'Handoff files')." >&2
   # do not loop forever — on the second attempt the orchestrator decides
-  [ "$ACTIVE" = "true" ] && exit 0
+  [ "$ACTIVE" = "true" ] && { PASSED_THROUGH=1; exit 0; }
   exit 2
 }
 

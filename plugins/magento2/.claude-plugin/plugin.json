@@ -1,6 +1,6 @@
 {
   "name": "magento2",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "Magento 2 / Adobe Commerce / Mage-OS coding rules, module README generator and change verification (browser via Playwright MCP, API, CLI)",
   "author": {
     "name": "Daniel Łyciuk"

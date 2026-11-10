@@ -2,7 +2,7 @@
   "hooks": {
     "SubagentStart": [
       {
-        "matcher": "^delivery:(business-analyst|solution-architect|senior-developer|code-reviewer|qa)$",
+        "matcher": "^(delivery:)?(business-analyst|solution-architect|senior-developer|code-reviewer|qa)$",
         "hooks": [
           {
             "type": "command",
@@ -13,11 +13,15 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^delivery:(business-analyst|solution-architect|senior-developer|code-reviewer|qa)$",
+        "matcher": "^(delivery:)?(business-analyst|solution-architect|senior-developer|code-reviewer|qa)$",
         "hooks": [
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/validate-handoff.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/collect-stats.sh\""
           }
         ]
       }
@@ -29,6 +33,26 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/pipeline-guard.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/bind-session.sh\""
           }
         ]
       }

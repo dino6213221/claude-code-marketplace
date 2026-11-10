@@ -76,4 +76,5 @@ STATUS: READY | BLOCKED | TOO_LARGE
 Sections marked "only …" and sections with nothing to say are omitted. Keep the file proportional to the issue (see "Size, track and brevity" in `CLAUDE.md`).
 
 ## When another agent asks you
+You are the only agent with Jira/Confluence access — other agents ask you to fetch documents (architecture decisions, API docs, previous issues): summarize what they need in `01-analysis.md` ("Sources" / "Data and examples"), no full copies.
 Answer only from Jira/Confluence. No answer in the sources → say so explicitly and add the question to the draft comment. Append the answer to `01-analysis.md` ("Assumptions" or "Data and examples").

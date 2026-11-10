@@ -11,7 +11,7 @@ You verify a change on the **local** environment. Never staging/production unles
 ## 0. Mode and environment
 
 **Mode:**
-- **Pipeline** — you are invoked by the `delivery:qa` agent (`var/agents/.current` and the issue's `03-test-plan.md` exist). Take the cases from the test plan, record results in `06-qa.md`, `<KEY>` = issue key.
+- **Pipeline** — you are invoked by the `delivery:qa` agent (its brief names the issue key and the handoff directory). Take the cases from the test plan (`03-test-plan.md`; on the fast track QA designs them in `06-qa.md`), record results in `06-qa.md`, `<KEY>` = issue key.
 - **Standalone** — everything else. Derive the cases yourself from the change description / ACs / `git diff` (show the list to the user before executing), report the result in the chat (format in section 5). `<KEY>` = Jira key from the branch or the request; without one — a short slug, e.g. `QA-cart-badge-`.
 
 **Environment** (`<URL>`, `<EXEC>`, `<DB>`, frontend):
@@ -56,14 +56,14 @@ Tools: `mcp__plugin_magento2_playwright__*`. Common ones: `browser_navigate`, `b
 
 For each case:
 1. `browser_navigate` to `<URL>` (local certificates are accepted — the server runs with `--ignore-https-errors`).
-2. `browser_snapshot` before interacting — click by snapshot references, not guessed selectors.
+2. `browser_snapshot` once per page before interacting — click by snapshot references, not guessed selectors. The plugin's server runs with `--snapshot-mode none` (actions return no snapshot) and `--image-responses omit` (screenshots go to files, not into your context): take a new snapshot only after navigation or a change that replaces the elements you need.
 3. Execute the steps. After every action that loads data (AJAX, GraphQL in PWA), `browser_wait_for` the expected text/element.
-4. Check:
-   - the expected result (text, state, price, message),
+4. Check — targeted, not by re-reading the whole page:
+   - the expected result (text, state, price, message) with `browser_find` / `browser_evaluate` on the element or text the case names, or `browser_wait_for` the expected text,
    - `browser_console_messages` — JS errors = defect, unless they existed before the change (check a page without the change),
-   - `browser_network_requests` — 4xx/5xx responses and errors in GraphQL responses (`errors` in the JSON),
+   - `browser_network_requests` — only 4xx/5xx responses and errors in GraphQL responses (`errors` in the JSON); open a single request with `browser_network_request` only when it failed,
    - mobile view only if the change affects layout/responsive behavior: `browser_resize` 375×812, then back to 1440×900.
-5. Evidence: `browser_take_screenshot` named `<case-ID>-<step>.png`; record the file path returned by the tool next to the result. A screenshot must not show personal data or real orders — dummy data only.
+5. Evidence: `browser_take_screenshot` named `<case-ID>-<step>.png`; record the file path returned by the tool next to the result. Look at a screenshot (Read tool on the file) only when the case is visual (layout, styling, image). A screenshot must not show personal data or real orders — dummy data only.
 6. FPC: only if the change affects cacheable output (blocks, layout, cache tags) — check the result after `cache:flush` and on the second visit (page from cache).
 
 ### Logging in

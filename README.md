@@ -45,11 +45,15 @@ Tests (require `jq`): `bash plugins/delivery/tests/hooks.sh` (guards and handoff
 |-------|----------|-------|
 | Agents | `plugins/delivery/agents/` | Preloaded skills (verified to load with plugin prefix): BA `workflow:jira-tasks`; SA `magento2:coding-rules`; Dev `magento2:coding-rules`, `workflow:git-conventions` (+ `magento2:module-readme` on demand); CR `magento2:coding-rules`, `workflow:git-conventions`; QA `magento2:verify-change` |
 | Project config | `.claude/delivery.json` (written by init) | `magentoRoot`, `env` (`warden`\|`reward`\|`ddev`\|`custom`\|`native`), `exec` + `db` + `envName` (custom), `baseUrl`, `mailUrl`, `edition`, `msi`, `multiStore`, `frontend`, `php`, `language` (handoff prose; headings stay English), `vcsHost`, `vcsRepo`, `envWorkarounds` (lines for CLAUDE.md, `{{EXEC}}` allowed), `extraAllow` / `extraDeny` (extra permission rules); only `magentoRoot` and `env` are required; handoff dir = `<magentoRoot>/var/agents/` |
-| Pipeline state | `var/agents/<KEY>/state.json` (orchestrator only) | `stage`, `round`, `track`, `size`, `risk`, `qaMode` — read by the hooks and `/delivery:status` |
+| Pipeline state | `var/agents/<KEY>/state.json` (orchestrator only) | `stage` (incl. `paused` + `resumeStage`), `round`, `track`, `size`, `risk`, `qaMode` — read by the hooks and `/delivery:status` |
 | Generators | `magento2-detect` (from `magento2`), `scripts/render.sh` | Detection and rendering of `templates/settings.json`, `templates/CLAUDE.md`, `templates/retired-rules.json` (`{{EXEC}}` etc.); fails on an unreplaced placeholder |
+| Session binding | `hooks/bind-session.sh` (PostToolUse Write/Edit) | Binds the orchestrator's session to its issue (`var/agents/.sessions/<session_id>`) when it writes `.current` or `state.json`; all hooks resolve the issue per session, so several sessions can run pipelines for different issues |
+| Code lock | `hooks/pipeline-guard.sh` (PreToolUse Write/Edit/Agent) | Only one issue at a time in `implementation`/`review`/`qa` (shared checkout and environment): atomic `var/agents/.code-lock` (mkdir) taken when `state.json` enters a code stage and released when it leaves; invalid `state.json` JSON and Edit of `state.json` blocked; pipeline agents (except BA) blocked in a session not bound to an issue; dev/CR/QA-exec calls blocked before the issue's code stage is recorded. `stage: paused` parks an issue (user's approval) |
+| git pre-push | `templates/pre-push`, installed by `/delivery:init` into the clone's hooks path | Authoritative: rejects pushes to `master`/`main` and non-fast-forward (force) pushes on the resolved refs — no quoting/alias/subshell bypass. Chains an existing hook kept as `pre-push.local` |
+| Statistics | `hooks/collect-stats.sh` (SubagentStop), `scripts/transcript-stats.jq`, `scripts/stats.sh`, `/delivery:stats` | Per agent run from its transcript: wall time, turns, model, tokens (input, cache write, cache read, output), time and result size per tool, 5 slowest calls (Bash labeled by program/subcommand only) → `var/agents/<KEY>/stats/`. Report per run/agent/tool + orchestrator; `--archive` at closing → `var/agents/_stats.jsonl`; `/delivery:stats all` compares issues by agent and size |
 | Start marker | `hooks/subagent-start.sh` (SubagentStart) | Writes `var/agents/<KEY>/.start-<agent>` so the gate can tell a fresh file from one left over from an earlier round |
 | Handoff gate | `hooks/validate-handoff.sh` (SubagentStop) | Rejects a handoff file with wrong status, missing sections (English or 1.0.x Polish headings), unchecked criteria on a positive status, not updated in this run, or longer than 2× the size guideline. Second attempt passes — the orchestrator decides. Appends every stop (agent, file, round, seconds, ok/rejected) to `var/agents/<KEY>/timings.log` for the retrospective |
-| Bash guards | `hooks/pre-bash.sh` (PreToolUse Bash, shared helpers in `hooks/lib.sh`) | **git-guard** — every `git`/`gh` blocked for `delivery:business-analyst` and `delivery:solution-architect`. **sql-guard** — `delivery:qa` only: DROP/TRUNCATE/ALTER, DELETE/UPDATE without WHERE, SQL writes not targeting `QA-` records, SQL from files, DB access from inline PHP. **push-guard** — every session in an initialized project: push to `master`/`main` via any refspec, force, `+refspec`, `--mirror`, `--all`, `--prune`. Defense in depth on top of the settings rules, not a sandbox |
+| Bash guards | `hooks/pre-bash.sh` (PreToolUse Bash, shared helpers in `hooks/lib.sh`) | **git-guard** — every `git`/`gh` blocked for `delivery:business-analyst` and `delivery:solution-architect`. **sql-guard** — `delivery:qa` only: DROP/TRUNCATE/ALTER, DELETE/UPDATE without WHERE, SQL writes not targeting `QA-` records, SQL from files, DB access from inline PHP. **push-guard** — every session in an initialized project: push to `master`/`main` via any refspec, force (also bundled `-uf`), `+refspec`, `--mirror`, `--all`, `--prune`, `--no-verify`, `git -c alias.*/push.*`, substitutions; quotes/subshells normalized; only the real `push` subcommand is inspected. Defense in depth on top of the settings rules and the pre-push hook, not a sandbox |
 | Playwright MCP | provided by `magento2` | used by `delivery:qa` via `mcp__plugin_magento2_playwright__*` |
 | Project settings | `templates/` | Rendered and merged by `/delivery:init` (plugins cannot ship project permissions or CLAUDE.md) |
 
@@ -61,6 +65,21 @@ Tests (require `jq`): `bash plugins/delivery/tests/hooks.sh` (guards and handoff
 - Standard track: the orchestrator runs the Solution Architect on `sonnet`/`medium` for S/M without schema/config/API/security flags, `opus`/`high` otherwise; the architect starts from the BA's code location and has a tool-call budget (S 15, M 30). Size M: architecture and test plan run in parallel, the plan is reconciled with the architecture afterwards.
 - Retrospective reports stage durations from `timings.log`.
 - Sections that don't apply are omitted; non-applicable criteria are `[x] n/a`. QA tests only what the change can break (size S: typically 2–5 cases).
+
+### Speed and token economy
+
+- Model and effort per agent chosen by the orchestrator (`deliver` → "Model and effort per agent"): `sonnet`/`medium` for SA, developer and CR on light issues (size S, no `schema`/`config`/`api`/`security` flag) and fix-checking rounds; escalation to the default when a light run hits a design doubt or a BLOCKER.
+- Fast track skips both the architecture and the separate test plan (QA designs the cases at execution).
+- Atlassian MCP only for the BA (and the orchestrator); other agents work from `01-analysis.md` and ask the BA.
+- Fix rounds read only the remark/defect IDs and the agent's previous file; CR reads the diff per file (`--stat` first), round N>1 only the delta since the reviewed commit; tools run on changed files only.
+- Playwright MCP runs with `--snapshot-mode none`, `--image-responses omit`, `--console-level error`; QA checks targeted elements (`browser_find`/`browser_evaluate`) instead of re-reading page snapshots.
+- Handoff prose defaults to English (`language` in `delivery.json`); the orchestrator talks to the user in the user's language.
+- `CLAUDE.md` section trimmed to rules every agent needs (loaded into every agent run).
+
+### Parallel issues
+
+- Run `/delivery:deliver <KEY>` in separate Claude Code sessions (one per issue). Analysis, architecture and test plans run in parallel; implementation, review and QA run for one issue at a time — the next issue waits at the lock (or the user parks the holder).
+- Full parallel implementation would need a separate checkout and environment per issue — not supported (the local environment serves one checkout).
 
 ### Git, access requests, manual actions
 
