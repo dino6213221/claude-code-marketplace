@@ -1,11 +1,11 @@
 # Claude Code Marketplace
 
-Claude Code plugin marketplace (local) for Magento 2 / Adobe Commerce / Mage-OS projects. Nothing in the plugins is tied to one project: everything project-specific (environment, command prefixes, edition, MSI, stores, frontend, repository host, workarounds) lives in the project's `.claude/delivery.json` and the `CLAUDE.md` section generated from it.
+Personal Claude Code plugin marketplace.
 
 ## Installation
 
 ```
-/plugin marketplace add <path to this repository>
+/plugin marketplace add https://github.com/dino6213221/claude-code-marketplace
 /plugin install magento2@daniel-marketplace
 /plugin install workflow@daniel-marketplace
 /plugin install delivery@daniel-marketplace
