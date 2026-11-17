@@ -1,3 +1,4 @@
 # Claude Code — agent memory (local, outside the repo)
 .claude/agent-memory-local/
 .claude/settings.local.json
+.playwright-mcp/

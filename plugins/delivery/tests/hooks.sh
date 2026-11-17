@@ -98,6 +98,14 @@ state '{"qaMode":"plan"}'; touch "$D/06-qa.md"
 expect 0 "QA plan mode checks 03"       validate-handoff.sh "$(stop_json delivery:qa)"
 state '{"qaMode":"exec"}'; rm -f "$D/06-qa.md"
 expect 2 "QA exec mode needs 06"        validate-handoff.sh "$(stop_json delivery:qa)"
+state '{"stage":"qa"}'
+expect 2 "QA without qaMode checks 06 (not the READY plan)" validate-handoff.sh "$(stop_json delivery:qa)"
+good PASS > "$D/06-qa.md"
+expect 0 "QA without qaMode passes with 06" validate-handoff.sh "$(stop_json delivery:qa)"
+state '{"stage":"test-plan"}'; rm -f "$D/06-qa.md"
+expect 0 "qa-planner checks 03"         validate-handoff.sh "$(stop_json delivery:qa-planner)"
+rm -f "$D/03-test-plan.md"
+expect 2 "qa-planner needs 03"          validate-handoff.sh "$(stop_json delivery:qa-planner)"
 
 # size limit
 state '{"size":"S"}'
@@ -105,6 +113,13 @@ state '{"size":"S"}'
 expect 2 "size S over 60 lines"         validate-handoff.sh "$(stop_json delivery:senior-developer)"
 state '{"size":"M"}'
 expect 0 "size M under 160 lines"       validate-handoff.sh "$(stop_json delivery:senior-developer)"
+state '{"size":"S"}'
+{ good DONE; printf '| %s |\n' "$(head -c 9000 /dev/zero | tr '\0' x)"; } > "$D/04-implementation.md"
+expect 2 "size S over 8 KB in few lines" validate-handoff.sh "$(stop_json delivery:senior-developer)"
+state '{"size":"M"}'
+expect 0 "size M under 20 KB"           validate-handoff.sh "$(stop_json delivery:senior-developer)"
+state '{"size":"L"}'
+expect 0 "size L has no byte limit"     validate-handoff.sh "$(stop_json delivery:senior-developer)"
 
 # timing log
 rm -f "$D/timings.log"
@@ -176,6 +191,9 @@ expect 2 "s2 dev call blocked (P-2 not in code stage)" pipeline-guard.sh "$(agen
 expect 0 "s2 SA call allowed"               pipeline-guard.sh "$(agent_json s2 delivery:solution-architect)"
 echo '{"stage":"test-plan","qaMode":"plan"}' > "$A/P-2/state.json"
 expect 0 "s2 QA plan allowed"               pipeline-guard.sh "$(agent_json s2 delivery:qa)"
+echo '{"stage":"test-plan"}' > "$A/P-2/state.json"
+expect 0 "s2 qa-planner allowed outside code stages" pipeline-guard.sh "$(agent_json s2 delivery:qa-planner)"
+expect 2 "s2 qa (exec) blocked outside code stages"  pipeline-guard.sh "$(agent_json s2 delivery:qa)"
 expect 0 "P-1 closing write releases the lock" pipeline-guard.sh "$(write_json s1 "$A/P-1/state.json" '{"stage":"closing"}')"
 echo '{"stage":"closing"}' > "$A/P-1/state.json"
 expect 0 "closing frees the lock"           pipeline-guard.sh "$(write_json s2 "$A/P-2/state.json" '{"stage":"implementation"}')"
@@ -276,6 +294,17 @@ echo '{"stage":"closing"}' > "$A/P-1/state.json"
 expect 2 "unbound session: dev blocked"      pipeline-guard.sh "$(agent_json s99 delivery:senior-developer)"
 expect 2 "unbound session: SA blocked"       pipeline-guard.sh "$(agent_json s99 delivery:solution-architect)"
 expect 0 "unbound session: BA allowed"       pipeline-guard.sh "$(agent_json s99 delivery:business-analyst)"
+expect 2 "unbound session: qa-planner blocked" pipeline-guard.sh "$(agent_json s99 delivery:qa-planner)"
+plan_json() { jq -nc --arg s "$1" --arg t "$2" --arg m "$3" '{session_id:$s, tool_name:"Agent", permission_mode:$m, tool_input:{subagent_type:$t}}'; }
+expect 2 "plan mode: BA blocked"             pipeline-guard.sh "$(plan_json s1 delivery:business-analyst plan)"
+expect 2 "plan mode: SA blocked"             pipeline-guard.sh "$(plan_json s1 delivery:solution-architect plan)"
+expect 0 "default mode: BA allowed"          pipeline-guard.sh "$(plan_json s1 delivery:business-analyst default)"
+expect 0 "plan mode: non-pipeline agent untouched" pipeline-guard.sh "$(plan_json s1 Explore plan)"
+PA="$A"; mv "$A" "$A.off"; mkdir -p "$A"
+expect 2 "plan mode: developer blocked even with no pipeline in use" pipeline-guard.sh "$(plan_json s77 delivery:senior-developer plan)"
+expect 0 "plan mode: BA ad hoc (no pipeline in use) allowed"         pipeline-guard.sh "$(plan_json s77 delivery:business-analyst plan)"
+expect 0 "default mode: developer ad hoc allowed"                    pipeline-guard.sh "$(plan_json s77 delivery:senior-developer default)"
+rmdir "$A"; mv "$A.off" "$A"
 expect 2 "unprefixed senior-developer gated" pipeline-guard.sh "$(agent_json s2 senior-developer)"
 
 # binding: writing another issue's state.json does not move the session
@@ -312,6 +341,19 @@ gp commit -q --allow-empty -m three
 check "pre-push: fast-forward ok"            'gp push -q origin HEAD:refs/heads/feature/T-1-y'
 printf '#!/bin/sh\nexit 1\n' > "$R/w/.git/hooks/pre-push.local"; chmod +x "$R/w/.git/hooks/pre-push.local"
 check "pre-push: chained local hook runs"    '! gp push -q origin HEAD:refs/heads/feature/T-1-z'
+
+# gate.sh summary
+G="$A/G-1"; mkdir -p "$G"; echo '{"stage":"architecture","size":"S"}' > "$G/state.json"
+printf 'STATUS: READY\n## Success criteria\n- [x] a\n- [ ] b\n## Body\n- [ ] not a criterion\n## Open questions\n- → user: GIT PROPOSAL — git x\n' > "$G/02-architecture.md"
+GO=$(bash "$HOOKS/../scripts/gate.sh" G-1)
+check "gate: status and unmet count"         'echo "$GO" | grep -q "02-architecture.md: STATUS READY · unmet criteria 1 "'
+check "gate: open question listed"           'echo "$GO" | grep -q "open: - → user: GIT PROPOSAL"'
+check "gate: unmet criterion listed"         'echo "$GO" | grep -q "unmet: - \[ \] b"'
+check "gate: missing files skipped"          '! echo "$GO" | grep -q "01-analysis.md"'
+{ printf 'STATUS: DONE\n## Success criteria\n## Open questions\n- none\n'; head -c 5000 /dev/zero | tr '\0' x; } > "$G/04-implementation.md"
+check "gate: over guideline flagged"         'bash "$HOOKS/../scripts/gate.sh" G-1 04-implementation.md | grep -q "over the size S guideline"'
+check "gate: single file only"               '! bash "$HOOKS/../scripts/gate.sh" G-1 04-implementation.md | grep -q "02-architecture.md"'
+rm -rf "$G"
 
 echo "passed: $PASS, failed: $FAILED"
 [ "$FAILED" -eq 0 ]

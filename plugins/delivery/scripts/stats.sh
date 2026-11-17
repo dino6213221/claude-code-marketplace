@@ -17,7 +17,7 @@ def dur: (. // 0 | floor) as $s | "\($s / 60 | floor)m\($s % 60 | tostring | if 
 def k: (. // 0) as $n | if $n >= 1000000 then "\($n / 100000 | floor / 10)M" elif $n >= 1000 then "\($n / 100 | floor / 10)k" else "\($n)" end;
 def new: (.tokens.input + .tokens.cache_write + .tokens.output);
 def pct($a; $b): if $b > 0 then "\($a * 100 / $b | round)%" else "-" end;
-def stg: if .agent == "qa" then "qa:\(.qaMode // "?")" else (.stage // "?") end;
+def stg: if .agent == "qa" and .qaMode != null then "qa:\(.qaMode)" else (.stage // "?") end;
 '
 
 if [ "${1:-}" = "--all" ]; then

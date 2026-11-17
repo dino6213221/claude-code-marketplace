@@ -1,0 +1,14 @@
+{
+  "browser": {
+    "contextOptions": {
+      "ignoreHTTPSErrors": true
+    }
+  },
+  "snapshot": {
+    "mode": "none"
+  },
+  "imageResponses": "omit",
+  "console": {
+    "level": "error"
+  }
+}

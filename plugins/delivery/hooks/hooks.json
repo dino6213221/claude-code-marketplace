@@ -2,7 +2,7 @@
   "hooks": {
     "SubagentStart": [
       {
-        "matcher": "^(delivery:)?(business-analyst|solution-architect|senior-developer|code-reviewer|qa)$",
+        "matcher": "^(delivery:)?(business-analyst|solution-architect|senior-developer|code-reviewer|qa|qa-planner)$",
         "hooks": [
           {
             "type": "command",
@@ -13,7 +13,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^(delivery:)?(business-analyst|solution-architect|senior-developer|code-reviewer|qa)$",
+        "matcher": "^(delivery:)?(business-analyst|solution-architect|senior-developer|code-reviewer|qa|qa-planner)$",
         "hooks": [
           {
             "type": "command",

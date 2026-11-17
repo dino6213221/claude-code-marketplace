@@ -1,5 +1,5 @@
 {
-  "_comment": "Rules from earlier template versions that the current template no longer has (or moved to another list). render.sh fills in {{EXEC}}; /delivery:init proposes removing them from the project's settings.json. Old Atlassian allow wildcards (project server, claude.ai connector, external atlassian plugin) are retired: Atlassian now comes from the workflow plugin. Old ask rules for those prefixes are intentionally NOT retired — they stay harmless if the user keeps another Atlassian source.",
+  "_comment": "Rules from earlier template versions that the current template no longer has (or moved to another list). render.sh fills in {{EXEC}}; /delivery:init proposes removing them from the project's settings.json. Atlassian comes from the official `atlassian` plugin (claude-plugins-official, tools mcp__plugin_atlassian_atlassian__*): its allow WILDCARD stays retired (it would allow writes — the template allows named read tools only), and the rules for the server the workflow plugin shipped until 1.1.0 (mcp__plugin_workflow_atlassian__*) are retired with it. Old ask rules for other prefixes are intentionally NOT retired — they stay harmless if the user keeps another Atlassian source. Playwright likewise comes from the official `playwright` plugin (mcp__plugin_playwright_playwright__*); the rule for the server the magento2 plugin shipped until 1.2.x is retired.",
   "allow": [
     "Bash(git commit *)",
     "Edit(var/agents/**)",
@@ -13,7 +13,25 @@
     "Bash({{EXEC}} tail *)",
     "mcp__atlassian__*",
     "mcp__claude_ai_Atlassian__*",
-    "mcp__plugin_atlassian_atlassian__*"
+    "mcp__plugin_atlassian_atlassian__*",
+    "mcp__plugin_workflow_atlassian__atlassianUserInfo",
+    "mcp__plugin_workflow_atlassian__getAccessibleAtlassianResources",
+    "mcp__plugin_workflow_atlassian__discover",
+    "mcp__plugin_workflow_atlassian__executeRead",
+    "mcp__plugin_workflow_atlassian__search",
+    "mcp__plugin_workflow_atlassian__searchJiraIssuesUsingJql",
+    "mcp__plugin_workflow_atlassian__getJiraIssue",
+    "mcp__plugin_workflow_atlassian__listJiraIssueComments",
+    "mcp__plugin_workflow_atlassian__searchConfluence",
+    "mcp__plugin_workflow_atlassian__getConfluenceContent",
+    "mcp__plugin_workflow_atlassian__getGraphContext",
+    "mcp__plugin_workflow_atlassian__getGraphObject",
+    "mcp__plugin_workflow_atlassian__getCollaborators",
+    "mcp__plugin_workflow_atlassian__getPeopleInfo",
+    "mcp__plugin_workflow_atlassian__getWorkActivity",
+    "mcp__plugin_workflow_atlassian__getWorkPortfolio",
+    "mcp__plugin_workflow_atlassian__getLoomObjectsContent",
+    "mcp__plugin_magento2_playwright__*"
   ],
   "deny": [
     "Bash(git push *)",
@@ -23,5 +41,15 @@
     "Read(app/etc/env.php)",
     "Read(auth.json)"
   ],
-  "ask": []
+  "ask": [
+    "mcp__plugin_workflow_atlassian__addOrEditJiraIssueComment",
+    "mcp__plugin_workflow_atlassian__editJiraIssue",
+    "mcp__plugin_workflow_atlassian__transitionJiraIssue",
+    "mcp__plugin_workflow_atlassian__createJiraIssue",
+    "mcp__plugin_workflow_atlassian__createConfluenceContent",
+    "mcp__plugin_workflow_atlassian__updateConfluenceContent",
+    "mcp__plugin_workflow_atlassian__addGraphContext",
+    "mcp__plugin_workflow_atlassian__executeWrite",
+    "mcp__plugin_workflow_atlassian__executeDestructive"
+  ]
 }

@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.7.0 — 2026-11-16
+
+Upgrade: `/plugin install atlassian@claude-plugins-official` and `/plugin install playwright@claude-plugins-official` (if missing), `/plugin marketplace update daniel-marketplace`, `/plugin update delivery`, `/plugin update magento2`, `/plugin update workflow`, `/reload-plugins`, then **`/delivery:init` in every project** (CLAUDE.md section, Atlassian rules moved to the official plugin's prefix — approve removing the retired `mcp__plugin_workflow_atlassian__*` and `mcp__plugin_magento2_playwright__*` rules, and the new `.claude/playwright-mcp.json`; projects with a PWA/headless storefront: set `frontendUrl`).
+
+Based on the transcripts of one full issue run on 1.2.0: the orchestrator was the most expensive participant (opus, context 86k → 233k, 13.4M cache-read tokens), QA made 131 single-command turns over a 100–178k context (54% of all subagent cache read), resumed agents rebuilt their whole cache after pauses (2 × 117–140k for one QA run), and long table rows passed the line limit (21 KB in 94 lines).
+
+### Atlassian from the official plugin (delivery, workflow 1.2.0)
+- **Fix:** with the official `atlassian` plugin (or another server on the same URL) enabled, Claude Code never started the server shipped by `workflow`, so `mcp__plugin_workflow_atlassian__*` did not exist — the BA had no Jira tools and the allow/ask rules matched nothing. Verified in a session with both plugins enabled.
+- `workflow` no longer ships `.mcp.json`. BA tools, the orchestrator's JQL call, the generated allow/ask rules and the CLAUDE.md section use `mcp__plugin_atlassian_atlassian__*` (official `atlassian@claude-plugins-official`). `/delivery:init` checks the plugin is installed and retires the old `mcp__plugin_workflow_atlassian__*` rules.
+- Rule going forward: official plugins instead of servers shipped by this marketplace.
+
+### Playwright from the official plugin (delivery, magento2 1.3.0)
+- `magento2` no longer ships `.mcp.json`. QA tools, the allow rule, CLAUDE.md and `verify-change` use `mcp__plugin_playwright_playwright__*` (official `playwright@claude-plugins-official`); the old `mcp__plugin_magento2_playwright__*` rule is retired.
+- The options the pipeline relies on moved from command-line flags to `.claude/playwright-mcp.json` (`ignoreHTTPSErrors`, snapshot mode `none`, image responses `omit`, console level `error`), written by `/delivery:init` and loaded through `env.PLAYWRIGHT_MCP_CONFIG` in `.claude/settings.json`. Verified locally on `@playwright/mcp` 0.0.83: the config file named by `PLAYWRIGHT_MCP_CONFIG` has the same effect as the flags (per-option variables such as `PLAYWRIGHT_MCP_SNAPSHOT_MODE` do not), and `env` from settings reaches stdio MCP servers, started in the project directory.
+- **Trade-off:** the official plugin runs `@playwright/mcp@latest` — the version is no longer pinned (was 0.0.83). Tested end to end on 0.0.85 (latest on 2026-11-16) through the installed official plugin: tool prefix `mcp__plugin_playwright_playwright__*`, a self-signed HTTPS page loads only with the config, no snapshot section in action results, console errors only. `imageResponses: omit` was not exercised.
+
+### delivery — plan mode
+- Verified: a subagent inherits the main session's plan mode and its Write fails ("Cannot write … while in plan mode"), so no handoff file can be produced. `pipeline-guard` now blocks pipeline agents while the session is in plan mode (`permission_mode` of the hook input) and the orchestrator asks the user to leave it. `senior-developer` is blocked in plan mode always — also when called ad hoc, outside a running pipeline — and its definition forbids working around a refused Edit/Write through Bash.
+
+### delivery — speed and token economy
+- **Orchestrator context:** no code/DB/Jira exploration and no full reads of handoff files — it works from each agent's fixed short "Final message" and the new `scripts/gate.sh <KEY> [file]` (status, unmet criteria, size, "Open questions" verbatim, gate rejections). Suggests a fresh session (`/clear` + `/delivery:deliver <KEY>`) after the architecture checkpoint and before QA. Briefs may not add rules of their own.
+- **Issue list without a subagent:** no key → one JQL call by the orchestrator; BA "mode A" removed.
+- **Fresh agent or continue:** SendMessage only for an immediate follow-up (gate rejection, shortening) within ~5 minutes; every fix round, re-run after a checkpoint/wait/interruption and the QA cleanup is a new agent with a narrow brief.
+- **New agent `qa-planner`** (stage 3): Read/Write/Glob/Grep only — no Playwright tools, no Bash, no preloaded skill. `qa` only executes tests. `state.json` no longer has `qaMode` (the hooks still honor it for issues started earlier).
+- **Turn economy** in every agent definition: parallel reads, chained commands, one script for repeated cases, trimmed output, one write of the handoff file. CR takes a small diff (≤ ~400 lines) in one call.
+- **QA retest scope:** `targeted` by default (failed / NOT RUN cases, cases touched by the changed files, one positive case per AC; other rows carried over as `PASS (round N-1)`); `full` after a Critical defect or BLOCKER remark, a fix in more than 3 files or shared code, or on the user's request. **This replaces "retest ALL cases every round".**
+- **BA tools:** 9 named Atlassian read tools instead of the whole server (26 tool schemas, including writes it never used).
+- **Handoff gate:** size limit also in bytes — S 8 KB, M 20 KB hard (guideline 4 / 10 KB), next to the line limit.
+- **Solution Architect:** default `effort: medium` in the definition; the orchestrator passes `effort: high` for heavy flags or size L (same policy as 1.4.0, now also for calls outside the table).
+- **Permissions:** generated settings allow `scripts/gate.sh` and `curl -sk` / `curl -sk -X POST` against `baseUrl` and `frontendUrl`. Database reads are deliberately not allow-listed (local databases may hold copies of real customer data); opt in per project through `extraAllow`.
+- **`frontendUrl`** in `delivery.json` → "Storefront URL for UI tests" in CLAUDE.md; `qa-planner` asks for it instead of QA failing a round on a wrong URL.
+- `/delivery:status` uses `gate.sh`. Tests: 16 new hook cases (qa-planner, byte limit, gate.sh), 9 new render cases.
+
+### magento2 (1.2.2)
+- `verify-change`: "Turn economy" rule (batch commands and checks, scripts for repeated cases), storefront URL for UI cases, `browser_network_requests` only with a filter.
+
 ## 1.6.0 — 2026-11-10
 
 Upgrade: `/plugin marketplace update daniel-marketplace`, `/plugin update delivery`, `/plugin update magento2`, `/reload-plugins`, then **`/delivery:init` in every project and every clone** (installs the git `pre-push` hook, new allow rule for agent memory).

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Generates settings.json, the CLAUDE.md section and retired-rules.json for a project from .claude/delivery.json.
 # Usage: render.sh <delivery.json> <output directory>
-# Output: <out>/settings.json, <out>/CLAUDE.md, <out>/retired-rules.json — /delivery:init merges them into the project's files.
+# Output: <out>/settings.json, <out>/CLAUDE.md, <out>/retired-rules.json, <out>/playwright-mcp.json — /delivery:init merges them into the project's files.
 set -euo pipefail
 CFG="$1"; OUT="$2"
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,6 +16,7 @@ ENV_TOOL=$(get .env)
 MAGENTO_ROOT=$(get .magentoRoot); MAGENTO_ROOT=${MAGENTO_ROOT:-.}
 BASE_URL=$(get .baseUrl)
 MAIL_URL=$(get .mailUrl)
+FRONTEND_URL=$(get .frontendUrl)
 PHP=$(get .php)
 LANGUAGE=$(get .language); LANGUAGE=${LANGUAGE:-English}
 VCS_HOST=$(get .vcsHost)
@@ -88,12 +89,22 @@ esc() { printf '%s' "$1" | sed -e 's/[\\#&]/\\&/g'; }
 
 # settings.json: placeholders + environment-specific deny rules + project extraAllow
 EXTRA=$(jq -c '.extraAllow // []' "$CFG")
+# QA's API checks without a prompt per call: curl against the local store / storefront only.
+# The rule ends at the host's "/" so a look-alike host (shop.test.example.com) does not match.
+for U in "$BASE_URL" "$FRONTEND_URL"; do
+  case "$U" in http://*|https://*) ;; *) continue ;; esac
+  U="${U%/}/"
+  EXTRA=$(echo "$EXTRA" | jq -c --arg u "$U" '. + ["Bash(curl -sk \($u)*)", "Bash(curl -sk -X POST \($u)*)"]')
+done
 # empty prefix (native): "{{EXEC}} bin/magento" -> "bin/magento"
 fill_exec() { if [ -n "$EXEC" ]; then sed "s#{{EXEC}}#$(esc "$EXEC")#g"; else sed -e 's#{{EXEC}} ##g' -e 's#{{EXEC}}##g'; fi; }
 fill_exec < "$TPL/settings.json" \
   | jq --argjson deny "$DENY" --argjson extra "$EXTRA" '
       .permissions.deny += $deny | .permissions.deny |= unique
       | .permissions.allow += $extra | .permissions.allow |= unique' > "$OUT/settings.json"
+
+# Playwright MCP options for the official playwright plugin (read through PLAYWRIGHT_MCP_CONFIG from settings.json env)
+cp "$TPL/playwright-mcp.json" "$OUT/playwright-mcp.json"
 
 # retired rules with the environment's prefix filled in
 fill_exec < "$TPL/retired-rules.json" > "$OUT/retired-rules.json"
@@ -112,6 +123,7 @@ fill_exec < "$TPL/CLAUDE.md" \
     -e "s#{{MAGENTO_ROOT}}#$(esc "$MAGENTO_ROOT")#g" \
     -e "s#{{BASE_URL}}#$(esc "${BASE_URL:-(not determined — ask the user)}")#g" \
     -e "s#{{MAIL_URL}}#$(esc "${MAIL_URL:-(not determined — ask the user)}")#g" \
+    -e "s#{{FRONTEND_URL}}#$(esc "${FRONTEND_URL:-same as the store URL (set \`frontendUrl\` in \`.claude/delivery.json\` when a headless/PWA storefront runs elsewhere, e.g. a dev server)}")#g" \
     -e "s#{{PHP}}#$(esc "${PHP:-determine from composer.json (require.php) and \`${EXEC:+$EXEC }php -v\`}")#g" \
     -e "s#{{LANGUAGE}}#$(esc "$LANGUAGE")#g" \
     -e "s#{{VCS}}#$(esc "$VCS")#g" \
@@ -121,4 +133,4 @@ fill_exec < "$TPL/CLAUDE.md" \
       {print}' > "$OUT/CLAUDE.md"
 rm -f "$FR_FILE" "$WA_FILE"
 grep -q '{{' "$OUT/CLAUDE.md" "$OUT/settings.json" && { echo "render: unreplaced placeholder left" >&2; exit 1; }
-echo "OK: $OUT/settings.json, $OUT/CLAUDE.md, $OUT/retired-rules.json"
+echo "OK: $OUT/settings.json, $OUT/CLAUDE.md, $OUT/retired-rules.json, $OUT/playwright-mcp.json"

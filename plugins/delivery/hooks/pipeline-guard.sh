@@ -6,10 +6,11 @@
 #   Write var/agents/<KEY>/state.json  -> must be valid JSON; entering a code stage takes the atomic lock
 #                                         var/agents/.code-lock (mkdir), leaving it releases the lock
 #   Edit  var/agents/<KEY>/state.json  -> blocked (use Write, so the new stage is known)
+#   Agent any pipeline agent           -> blocked while the session is in plan mode (subagents inherit it, no writes)
 #   Agent pipeline agent (except BA)   -> blocked when the session is not bound to an issue
-#   Agent senior-developer / code-reviewer / qa (exec) -> blocked unless this issue holds a code stage
+#   Agent senior-developer / code-reviewer / qa -> blocked unless this issue holds a code stage (qa-planner is free)
 INPUT=$(cat)
-case "$INPUT" in *var/agents/*|*developer*|*reviewer*|*qa*|*architect*) ;; *) exit 0 ;; esac    # fast path
+case "$INPUT" in *var/agents/*|*developer*|*reviewer*|*qa*|*architect*|*analyst*) ;; *) exit 0 ;; esac    # fast path
 . "$(dirname "$0")/lib.sh"
 command -v jq >/dev/null || exit 0
 [ -f "$DELIVERY_JSON" ] || exit 0
@@ -69,8 +70,16 @@ case "$TOOL" in
   Agent|Task)
     T=$(echo "$INPUT" | jq -r '.tool_input.subagent_type // empty')
     T=${T#delivery:}
+    # Plan mode is inherited by subagents: they cannot write their handoff file (verified: "Cannot write … while in plan mode").
+    case "$T" in business-analyst|solution-architect|qa-planner|senior-developer|code-reviewer|qa)
+      # senior-developer: always (it exists to change code); the others: whenever a pipeline is in use.
+      if [ "$(echo "$INPUT" | jq -r '.permission_mode // empty')" = "plan" ] && { [ "$T" = "senior-developer" ] || [ -n "$(current_key)" ] || pipeline_in_use; }; then
+        echo "delivery: the session is in plan mode — subagents inherit it and cannot write handoff files (state.json cannot be written either). Ask the user to leave plan mode (Shift+Tab) and continue; do not start pipeline agents until then." >&2
+        exit 2
+      fi ;;
+    esac
     case "$T" in
-      senior-developer|code-reviewer|qa|solution-architect) ;;
+      senior-developer|code-reviewer|qa|qa-planner|solution-architect) ;;
       *) exit 0 ;;                                  # business-analyst (mode A runs unbound) and non-pipeline agents
     esac
     KEY=$(current_key)
@@ -80,7 +89,7 @@ case "$TOOL" in
     fi
     case "$T" in
       senior-developer|code-reviewer) ;;
-      qa) [ "$(state .qaMode)" = "exec" ] || exit 0 ;;
+      qa) [ "$(state .qaMode)" = "plan" ] && exit 0 ;;   # "plan" = issue started with delivery < 1.7.0 (qa wrote the plan)
       *) exit 0 ;;
     esac
     ST=$(state .stage)

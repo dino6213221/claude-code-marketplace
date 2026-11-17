@@ -18,6 +18,7 @@
   - `{{EXEC}} vendor/bin/phpcs --standard=Magento2 <path>`
 - Database: `{{DB}} -e "<SELECT ...>"` (read only, unless a QA task requires otherwise — see the data rules).
 - Store URL: {{BASE_URL}}
+- Storefront URL for UI tests: {{FRONTEND_URL}}
 - Test e-mails: {{MAIL_URL}}
 - Do not stop the environment with volume removal, do not delete the environment and do not import databases without the user's approval.
 - Do NOT use `isolation: worktree` or separate worktrees: the environment serves the store from the main checkout, so code in a worktree would be invisible to smoke tests and QA.
@@ -33,7 +34,7 @@
 ## Security and data
 - Secrets only through 1Password (`op run`, `op read "op://Vault/Item/field"`). Never output passwords/tokens in files, commands, commits or Jira.
 - Client data is confidential. Do not paste raw database rows or logs into Jira, PRs or handoff files — summarize and pseudonymize.
-- MCP: the pipeline uses only the servers shipped with this marketplace — Atlassian (Jira/Confluence, `mcp__plugin_workflow_atlassian__*`) for the Business Analyst and the orchestrator only; the other agents work from `01-analysis.md` and ask the BA — and Playwright from the `magento2` plugin (`mcp__plugin_magento2_playwright__*`, used by QA). Do not use Atlassian tools from other sources (project server, connector, other plugins) in the pipeline. Allow-listed read tools work without prompts; every write to an external system needs the user's approval. New MCP server → first check it is on the "Approved Tools" list; pin the version exactly (no `@latest`).
+- MCP: Atlassian (Jira/Confluence) comes from the official `atlassian` plugin (`atlassian@claude-plugins-official`, tools `mcp__plugin_atlassian_atlassian__*`) — for the Business Analyst and the orchestrator only; the other agents work from `01-analysis.md` and ask the BA — and Playwright from the official `playwright` plugin (`playwright@claude-plugins-official`, tools `mcp__plugin_playwright_playwright__*`, used by `qa` at test execution; its options live in `.claude/playwright-mcp.json`, loaded through `PLAYWRIGHT_MCP_CONFIG` in `.claude/settings.json`). Do not use Atlassian tools from other sources (project `.mcp.json` server, claude.ai connector) in the pipeline — the permission rules cover the official plugin only. Allow-listed read tools work without prompts; every write to an external system needs the user's approval. MCP servers come from official plugins; a server added any other way → first check it is on the "Approved Tools" list and pin its version exactly (no `@latest`).
 - Destructive operations (DROP/TRUNCATE, DELETE/UPDATE without WHERE, `rm -rf`, force-push, `reset --hard`, skipping hooks) → require the user's confirmation naming the environment.
 - Business rules: Jira/Confluence are the source. Code = current behavior, Confluence/Jira = intended behavior. Divergence → report it, do not resolve it yourself. Never invent rules.
 
@@ -54,8 +55,10 @@
 - Directory: `{{MAGENTO_ROOT}}/var/agents/<KEY>/` (ignored by git). Every `var/agents/...` path in the agent and orchestrator definitions means `{{MAGENTO_ROOT}}/var/agents/...` relative to the project directory. `state.json`, `.current` and `.sessions/` belong to the orchestrator and the hooks.
 - Files and allowed statuses: `01-analysis.md` READY|BLOCKED|TOO_LARGE · `02-architecture.md` READY|NEEDS_INPUT|TOO_LARGE · `03-test-plan.md` READY|NEEDS_INPUT · `04-implementation.md` DONE|NEEDS_INPUT · `05-review.md` APPROVED|CHANGES_REQUESTED · `06-qa.md` PASS|FAIL · `07-retro.md` (no status).
 - Every file starts with the line `STATUS: <value>`, has a `## Success criteria` section (checklist `[x]`/`[ ]`) and `## Open questions` in the format `- → <agent>: <question>` (or "none"). Headings and statuses stay exactly as written here (English); prose is written in {{LANGUAGE}}.
-- The `SubagentStop` hook rejects: a positive status with any `[ ]`, a file not updated during the agent's run, and a file over twice the size guideline (S > 60 lines, M > 160).
-- Read only the handoff files your brief lists; in a fix round read only the sections the brief names (remark/defect IDs) plus your own previous file.
+- The `SubagentStop` hook rejects: a positive status with any `[ ]`, a file not updated during the agent's run, and a file over twice the size guideline (S > 60 lines or 8 KB, M > 160 lines or 20 KB) — long table rows count.
+- Your final message to the orchestrator is the short summary defined in your agent definition ("Final message") — never the file content; the orchestrator does not read handoff files in full.
+- `03-test-plan.md` is written by `qa-planner`, `06-qa.md` by `qa`.
+- Read only the handoff files your brief lists — in one turn (parallel Read calls); in a fix round read only the sections the brief names (remark/defect IDs) plus your own previous file.
 
 ## Size, track and brevity
 - The business analyst assigns a size to every issue; all agents scale their work and output to it:
@@ -70,7 +73,8 @@
   - success criteria that do not apply: `- [x] n/a — <criterion>`, no explanation,
   - do not restate earlier handoff files — reference them (e.g. "AC1–AC3 as in 01-analysis.md"),
   - bullet points and tables, no prose introductions or summaries of what you are about to do,
-  - guideline per handoff file: S ≤ 30 lines, M ≤ 80 lines, L as needed.
+  - guideline per handoff file: S ≤ 30 lines / 4 KB, M ≤ 80 lines / 10 KB, L as needed; table rows under ~200 characters,
+  - turn economy: every turn re-reads the whole context — batch independent reads and commands into one turn, chain related commands, print only the lines you need.
 
 ## Agent memory
 - `local` memory lives only in `<project directory>/.claude/agent-memory-local/` (never under `var/agents/`). Technical project knowledge only — never client data, personal data or secrets.

@@ -22,13 +22,17 @@ case "$AGENT" in
   solution-architect) FILE="02-architecture.md";    OK="READY";    ALL="READY|NEEDS_INPUT|TOO_LARGE" ;;
   senior-developer)   FILE="04-implementation.md";  OK="DONE";     ALL="DONE|NEEDS_INPUT" ;;
   code-reviewer)      FILE="05-review.md";          OK="APPROVED"; ALL="APPROVED|CHANGES_REQUESTED" ;;
+  qa-planner)         FILE="03-test-plan.md";       OK="READY";    ALL="READY|NEEDS_INPUT" ;;
   qa)
+    # qa executes tests (06-qa.md). qaMode "plan" = an issue started with delivery < 1.7.0, where qa also wrote the plan.
     case "$QA_MODE" in
       plan) FILE="03-test-plan.md" ;;
       exec) FILE="06-qa.md" ;;
-      *)    # legacy fallback (no state.json): the most recently modified QA file
-            FILE=$( { ls -t "$DIR"/03-test-plan.md "$DIR"/06-qa.md 2>/dev/null || true; } | head -1)
-            FILE=${FILE##*/}; [ -n "$FILE" ] || FILE="06-qa.md" ;;
+      *)    if [ -f "$DIR/state.json" ]; then FILE="06-qa.md"; else
+              # legacy fallback (no state.json): the most recently modified QA file
+              FILE=$( { ls -t "$DIR"/03-test-plan.md "$DIR"/06-qa.md 2>/dev/null || true; } | head -1)
+              FILE=${FILE##*/}; [ -n "$FILE" ] || FILE="06-qa.md"
+            fi ;;
     esac
     if [ "$FILE" = "03-test-plan.md" ]; then OK="READY"; ALL="READY|NEEDS_INPUT"; else OK="PASS"; ALL="PASS|FAIL"; fi ;;
   *) exit 0 ;;   # other agents (Explore, Plan, …) — no validation
@@ -78,14 +82,18 @@ if [ "$STATUS" = "$OK" ]; then
   [ "$UNCHECKED" -eq 0 ] || fail "status $STATUS with $UNCHECKED unmet criteria"
 fi
 
-# Proportionality: hard limit = 2x the size guideline (S ≤ 30, M ≤ 80 lines); L has no limit
+# Proportionality: hard limit = 2x the size guideline (S ≤ 30 lines / 4 KB, M ≤ 80 lines / 10 KB); L has no limit.
+# Bytes are checked as well as lines: long table rows otherwise slip under the line limit.
 case "$SIZE" in
-  S) LIMIT=30 ;;
-  M) LIMIT=80 ;;
-  *) LIMIT=0 ;;
+  S) LIMIT=30; KB=4 ;;
+  M) LIMIT=80; KB=10 ;;
+  *) LIMIT=0; KB=0 ;;
 esac
 if [ "$LIMIT" -gt 0 ]; then
+  HOW="shorten: no restating earlier files, one short line per table row, omit sections that do not apply"
   LINES=$(wc -l < "$P" | tr -d ' ')
-  [ "$LINES" -le $((LIMIT * 2)) ] || fail "$LINES lines for a size $SIZE issue (guideline ≤ $LIMIT, hard limit $((LIMIT * 2))) — shorten: no restating earlier files, tables instead of prose, omit sections that do not apply"
+  [ "$LINES" -le $((LIMIT * 2)) ] || fail "$LINES lines for a size $SIZE issue (guideline ≤ $LIMIT, hard limit $((LIMIT * 2))) — $HOW"
+  BYTES=$(wc -c < "$P" | tr -d ' ')
+  [ "$BYTES" -le $((KB * 2048)) ] || fail "$((BYTES / 1024)) KB for a size $SIZE issue (guideline ≤ $KB KB, hard limit $((KB * 2)) KB) — $HOW"
 fi
 exit 0
