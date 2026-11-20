@@ -1,6 +1,6 @@
 # Claude Code Marketplace
 
-Personal Claude Code plugin marketplace.
+Claude Code plugin marketplace (local) for Magento 2 / Adobe Commerce / Mage-OS projects. Nothing in the plugins is tied to one project: everything project-specific (environment, command prefixes, edition, MSI, stores, frontend, repository host, workarounds) lives in the project's `.claude/delivery.json` and the `CLAUDE.md` section generated from it.
 
 ## Installation
 
@@ -33,6 +33,7 @@ Tests (require `jq`): `bash plugins/delivery/tests/hooks.sh` (guards and handoff
 | external | Atlassian MCP | Official plugin `atlassian@claude-plugins-official` (`/plugin install atlassian@claude-plugins-official`, OAuth on first use via `/mcp`); tools `mcp__plugin_atlassian_atlassian__*` — the only Atlassian source the pipeline uses. This marketplace ships no Atlassian server of its own (a second server with the same URL is dropped by Claude Code, which left the pipeline without Jira tools) |
 | `workflow` | `/workflow:git-conventions` | Branch naming, commit message and PR description conventions |
 | `workflow` | `/workflow:jira-tasks` | Jira task templates (Story / Bug), title format and field guidance |
+| `workflow` | `/workflow:jira-comments` | Short Jira comments in a human tone: first line = the ask or the fact, ≤ 600 characters, no implementation terms; types questions / scope confirmation / split proposal / delivery note |
 | `delivery` | `/delivery:deliver [KEY]` | Orchestrator: BA → SA → QA plan → Dev → CR → QA, with handoff files and `state.json` in `var/agents/<KEY>/`; resumes an interrupted issue |
 | `delivery` | `/delivery:status [KEY]` | Read-only: stage, round, statuses of the handoff files, next step |
 | `delivery` | `/delivery:apply-retro [source dir]` | Turns open points of `var/agents/_retro.md` into plugin changes (with approval), bumps versions, marks points applied |
@@ -43,7 +44,7 @@ Tests (require `jq`): `bash plugins/delivery/tests/hooks.sh` (guards and handoff
 
 | Piece | Location | Notes |
 |-------|----------|-------|
-| Agents | `plugins/delivery/agents/` | Preloaded skills (verified to load with plugin prefix): BA `workflow:jira-tasks`; SA `magento2:coding-rules`; Dev `magento2:coding-rules`, `workflow:git-conventions` (+ `magento2:module-readme` on demand); CR `magento2:coding-rules`, `workflow:git-conventions`; `qa` `magento2:verify-change`; `qa-planner` none (Read/Write/Glob/Grep only — no browser, no Bash). BA has only the Atlassian read tools it uses (9 instead of the whole server). Every agent ends with a fixed short "Final message" for the orchestrator |
+| Agents | `plugins/delivery/agents/` | Preloaded skills (verified to load with plugin prefix): BA `workflow:jira-tasks`, `workflow:jira-comments`; SA `magento2:coding-rules`; Dev `magento2:coding-rules`, `workflow:git-conventions` (+ `magento2:module-readme` on demand); CR `magento2:coding-rules`, `workflow:git-conventions`; `qa` `magento2:verify-change`; `qa-planner` none (Read/Write/Glob/Grep only — no browser, no Bash). BA has only the Atlassian read tools it uses (9 instead of the whole server). Every agent ends with a fixed short "Final message" for the orchestrator |
 | Project config | `.claude/delivery.json` (written by init) | `magentoRoot`, `env` (`warden`\|`reward`\|`ddev`\|`custom`\|`native`), `exec` + `db` + `envName` (custom), `baseUrl`, `mailUrl`, `frontendUrl` (storefront UI for tests when a headless/PWA storefront runs on its own URL), `edition`, `msi`, `multiStore`, `frontend`, `php`, `language` (handoff prose; headings stay English), `vcsHost`, `vcsRepo`, `envWorkarounds` (lines for CLAUDE.md, `{{EXEC}}` allowed), `extraAllow` / `extraDeny` (extra permission rules); only `magentoRoot` and `env` are required; handoff dir = `<magentoRoot>/var/agents/` |
 | Pipeline state | `var/agents/<KEY>/state.json` (orchestrator only) | `stage` (incl. `paused` + `resumeStage`), `round`, `track`, `size`, `risk` — read by the hooks and `/delivery:status` |
 | Generators | `magento2-detect` (from `magento2`), `scripts/render.sh` | Detection and rendering of `templates/settings.json`, `templates/CLAUDE.md`, `templates/retired-rules.json` (`{{EXEC}}` etc.); fails on an unreplaced placeholder |

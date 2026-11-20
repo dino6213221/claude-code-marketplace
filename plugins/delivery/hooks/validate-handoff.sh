@@ -82,6 +82,12 @@ if [ "$STATUS" = "$OK" ]; then
   [ "$UNCHECKED" -eq 0 ] || fail "status $STATUS with $UNCHECKED unmet criteria"
 fi
 
+# Draft Jira comment (BA): hard limit 2x the 600-character guideline of workflow:jira-comments (bytes ≥ characters)
+if [ "$AGENT" = "business-analyst" ]; then
+  CB=$(awk '/^## (Draft Jira comment|Projekt komentarza)/ {f=1; next} /^## /{f=0} f' "$P" | { grep -v '^[[:space:]]*$' || true; } | wc -c | tr -d ' ')
+  [ "$CB" -le 1200 ] || fail "the draft Jira comment has $CB bytes (guideline ≤ 600 characters, hard limit 1200 bytes) — rewrite it per the workflow:jira-comments skill: first line = the ask, at most 5 numbered questions with defaults, no restated ACs, no implementation terms"
+fi
+
 # Proportionality: hard limit = 2x the size guideline (S ≤ 30 lines / 4 KB, M ≤ 80 lines / 10 KB); L has no limit.
 # Bytes are checked as well as lines: long table rows otherwise slip under the line limit.
 case "$SIZE" in

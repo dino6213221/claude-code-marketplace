@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.0 — 2026-11-20
+
+Upgrade: `/plugin marketplace update daniel-marketplace`, `/plugin update workflow`, `/plugin update delivery`, `/reload-plugins`. No `/delivery:init` needed.
+
+### workflow 1.3.0 — Jira comments
+- New skill `workflow:jira-comments`: comments for people outside the code — human tone (full sentences like a colleague, the person addressed by name, "we"/"you", polite asks, no telegraphic or machine phrasing), first line = the ask or the fact, at most 600 characters / 8 lines (manual-actions list exempt), at most 5 questions each with a default, one purpose per comment, the language of the issue's discussion, no implementation terms (classes, tables, SQL, logs), no pipeline internals, no customer data, no headings/emoji/signatures, @mentions only with approval, exact approved text posted. Four types: questions, scope confirmation, split proposal, delivery note.
+- `jira-tasks` points to it for comments (it covered only creating issues; no comment rules existed anywhere).
+
+### delivery 1.8.0
+- BA preloads `workflow:jira-comments`; its draft comment has a success criterion and a hard limit in the handoff gate (> 1200 bytes rejected).
+- Orchestrator: every Jira comment follows the skill; the closing comment is a "Delivery note".
+
 ## 1.7.0 — 2026-11-16
 
 Upgrade: `/plugin install atlassian@claude-plugins-official` and `/plugin install playwright@claude-plugins-official` (if missing), `/plugin marketplace update daniel-marketplace`, `/plugin update delivery`, `/plugin update magento2`, `/plugin update workflow`, `/reload-plugins`, then **`/delivery:init` in every project** (CLAUDE.md section, Atlassian rules moved to the official plugin's prefix — approve removing the retired `mcp__plugin_workflow_atlassian__*` and `mcp__plugin_magento2_playwright__*` rules, and the new `.claude/playwright-mcp.json`; projects with a PWA/headless storefront: set `frontendUrl`).

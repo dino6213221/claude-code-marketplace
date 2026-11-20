@@ -107,6 +107,16 @@ expect 0 "qa-planner checks 03"         validate-handoff.sh "$(stop_json deliver
 rm -f "$D/03-test-plan.md"
 expect 2 "qa-planner needs 03"          validate-handoff.sh "$(stop_json delivery:qa-planner)"
 
+# draft Jira comment length (BA)
+state '{"stage":"analysis"}'
+{ printf 'STATUS: BLOCKED\n## Success criteria\n- [ ] a\n## Draft Jira comment\n@A — one decision needed:\n1. X? (default: yes)\n## Open questions\n- → user: x\n'; } > "$D/01-analysis.md"
+expect 0 "BA short draft comment ok"    validate-handoff.sh "$(stop_json delivery:business-analyst)"
+{ printf 'STATUS: BLOCKED\n## Success criteria\n- [ ] a\n## Draft Jira comment\n%s\n## Open questions\n- → user: x\n' "$(head -c 1300 /dev/zero | tr '\0' x)"; } > "$D/01-analysis.md"
+expect 2 "BA draft comment over 1200 bytes" validate-handoff.sh "$(stop_json delivery:business-analyst)"
+{ printf 'STATUS: BLOCKED\n## Success criteria\n- [ ] a\n## Data and examples\n%s\n## Open questions\n- → user: x\n' "$(head -c 1300 /dev/zero | tr '\0' x)"; } > "$D/01-analysis.md"
+expect 0 "long section other than the comment not counted" validate-handoff.sh "$(stop_json delivery:business-analyst)"
+rm -f "$D/01-analysis.md"
+
 # size limit
 state '{"size":"S"}'
 { good DONE; for i in $(seq 1 70); do echo "line $i"; done; } > "$D/04-implementation.md"

@@ -5,6 +5,8 @@ description: Turn user intents, meeting notes or bug reports into clear, actiona
 
 # Creating Jira Tasks
 
+Comments on existing issues: the `workflow:jira-comments` skill.
+
 As an AI Agent, your role is to transform user intents, meeting notes, or bug reports into professional, clear, and actionable Jira tasks.
 
 Your goal is to minimize ambiguity and ensure that the developer or assignee has all the necessary information to start working.
